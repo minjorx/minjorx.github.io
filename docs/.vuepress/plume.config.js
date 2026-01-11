@@ -50,8 +50,8 @@ export default defineThemeConfig({
    */
   profile: {
     avatar: 'https://theme-plume.vuejs.press/plume.png',
-    name: 'Minjor&#x27;s Pages',
-    description: 'Minjor&#x27;s Pages',
+    name: 'Minjor\'s Pages',
+    description: 'Minjor\'s Pages',
     // circle: true,
     // location: '',
     // organization: '',

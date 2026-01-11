@@ -1,50 +1,123 @@
 :root {
   /** 主题颜色 */
 
-  /*
   --vp-c-brand-1: #5086a1;
   --vp-c-brand-2: #6aa1b7;
   --vp-c-brand-3: #8cccd5;
   --vp-c-brand-soft: rgba(131, 208, 218, 0.314);
-  */
 
   /** 背景颜色 */
 
-  /*
   --vp-c-bg: #fff;
   --vp-c-bg-alt: #f6f6f7;
   --vp-c-bg-elv: #fff;
   --vp-c-bg-soft: #f6f6f7;
-  */
 
   /** 文本颜色 */
 
-  /*
   --vp-c-text-1: rgba(60, 60, 67);
   --vp-c-text-2: rgba(60, 60, 67, 0.78);
   --vp-c-text-3: rgba(60, 60, 67, 0.56);
-  */
+  
+  /** 终端风格颜色变量 */
+  --terminal-bg: #0a0a0a;
+  --terminal-text: #e6e6e6;
+  --terminal-green: #4caf50;
+  --terminal-accent: #0f9d58;
+  --terminal-border: #333;
+  --terminal-selection: rgba(76, 175, 80, 0.3);
 }
 
 /** 深色模式 */
 [data-theme="dark"] {
-  /*
   --vp-c-brand-1: #8cccd5;
   --vp-c-brand-2: #6aa1b7;
   --vp-c-brand-3: #5086a1;
   --vp-c-brand-soft: rgba(131, 208, 218, 0.314);
-  */
 
-  /*
   --vp-c-bg: #1b1b1f;
   --vp-c-bg-alt: #161618;
   --vp-c-bg-elv: #202127;
   --vp-c-bg-soft: #202127;
-  */
 
-  /*
   --vp-c-text-1: rgba(255, 255, 245, 0.86);
   --vp-c-text-2: rgba(235, 235, 245, 0.6);
   --vp-c-text-3: rgba(235, 235, 245, 0.38);
-  */
+}
+
+/** 终端风格样式 */
+.terminal-style {
+  background-color: var(--terminal-bg) !important;
+  color: var(--terminal-text) !important;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+}
+
+.terminal-style * {
+  color: var(--terminal-text) !important;
+}
+
+.terminal-style a,
+.terminal-style .link {
+  color: var(--terminal-green) !important;
+  text-decoration: none;
+}
+
+.terminal-style a:hover,
+.terminal-style .link:hover {
+  color: var(--terminal-accent) !important;
+  text-decoration: underline;
+}
+
+.terminal-style pre,
+.terminal-style code {
+  background-color: #1a1a1a !important;
+  border: 1px solid var(--terminal-border) !important;
+  border-radius: 4px;
+  color: var(--terminal-text) !important;
+}
+
+.terminal-style blockquote {
+  border-left: 3px solid var(--terminal-green) !important;
+  background-color: rgba(76, 175, 80, 0.05) !important;
+  color: var(--terminal-text) !important;
+}
+
+.terminal-style hr {
+  border-top: 1px solid var(--terminal-border) !important;
+}
+
+.terminal-style table {
+  border-collapse: collapse;
+}
+
+.terminal-style table th,
+.terminal-style table td {
+  border: 1px solid var(--terminal-border) !important;
+}
+
+.terminal-style table th {
+  background-color: rgba(76, 175, 80, 0.1) !important;
+}
+
+.terminal-style input,
+.terminal-style textarea,
+.terminal-style select {
+  background-color: #1a1a1a !important;
+  border: 1px solid var(--terminal-border) !important;
+  color: var(--terminal-text) !important;
+}
+
+.terminal-style button {
+  background-color: var(--terminal-green) !important;
+  color: var(--terminal-bg) !important;
+  border: none !important;
+}
+
+.terminal-style button:hover {
+  background-color: var(--terminal-accent) !important;
+}
+
+/* 选中文本样式 */
+.terminal-style ::selection {
+  background-color: var(--terminal-selection) !important;
 }

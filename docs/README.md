@@ -6,18 +6,21 @@ config:
     type: hero
     full: true
     forceDark: true
-    effect: lightning
     hero:
-      name: Theme Plume
-      tagline: VuePress Next Theme
-      text: 一个简约的，功能丰富的 vuepress 文档&博客 主题
+      name: Minjor's Pages
+      tagline: Some Blogs & Tools
+      text: minjor@minjor.com
       actions:
         -
           theme: brand
           text: 博客
           link: /blog/
         -
+          theme: brand
+          text: 工具
+          link: /tool/
+        -
           theme: alt
           text: Github →
-          link: https://github.com/pengzhanbo/vuepress-theme-plume
+          link: https://github.com/minjorx
 ---
