@@ -17,6 +17,8 @@ permalink: /blog/vgfuwgih/
 ### 1. 依赖配置
 要成功在 Spring Boot 4 中集成 Micrometer Tracing，需要添加以下依赖：
 
+[Maven::spring-boot-micrometer-tracing-brave](https://mvnrepository.com/artifact/org.springframework.boot/spring-boot-micrometer-tracing-brave)
+
 ```xml
 <dependency>
     <groupId>org.springframework.boot</groupId>
