@@ -14,6 +14,7 @@ import { defineUserConfig } from 'vuepress'
 import { plumeTheme } from 'vuepress-theme-plume'
 
 export default defineUserConfig({
+  port: 5173,
   base: '/',
   lang: 'zh-CN',
   title: 'Minjor\'s Pages',
