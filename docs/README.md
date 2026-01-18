@@ -17,6 +17,10 @@ config:
           link: /blog/
         -
           theme: brand
+          text: 常用网站
+          link: /blog/🚀 开发相关/📦 其他相关/常用网站.md
+        -
+          theme: brand
           text: 工具
           link: /tool/
         -

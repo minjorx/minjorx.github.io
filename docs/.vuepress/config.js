@@ -13,6 +13,9 @@ import { viteBundler } from '@vuepress/bundler-vite'
 import { defineUserConfig } from 'vuepress'
 import { plumeTheme } from 'vuepress-theme-plume'
 import { googleAnalyticsPlugin } from '@vuepress/plugin-google-analytics'
+import { getDirname, path } from 'vuepress/utils'
+
+const __dirname = getDirname(import.meta.url)
 
 export default defineUserConfig({
   plugins: [
@@ -30,7 +33,6 @@ export default defineUserConfig({
     // 配置站点图标
     ['link', { rel: 'icon', type: 'ico', href: '/favicon.ico' }],
   ],
-
   bundler: viteBundler(),
   shouldPrefetch: true, // 站点较大，页面数量较多时，不建议启用
 
@@ -181,4 +183,10 @@ export default defineUserConfig({
     //   locale: '/',    // 默认仅为主语言生成 llms 友好内容
     // }
   }),
+  alias: {
+    '@theme/VPFooter.vue': path.resolve(
+      __dirname,
+      './components/MyFooter.vue',
+    ),
+  },
 })
