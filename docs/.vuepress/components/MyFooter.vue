@@ -4,17 +4,23 @@
       <div class="footer-info">
         <p class="powered-by">Powered by VuePress Plume</p>
         &nbsp;|&nbsp;
-        <p class="contact-email">Created by <a href="mailto:minjor@minjor.com">Minjor</a></p>
-        <p class="copyright">© {{ currentYear }} Minjor. All rights reserved.</p>
+        <p class="contact-email">
+          Created by <a href="mailto:minjor@minjor.com">Minjor</a>
+        </p>
+        &nbsp;|&nbsp;
+        <p class="contact-email"><a href="/">Home</a></p>
+        <p class="copyright">
+          © {{ currentYear }} Minjor. All rights reserved.
+        </p>
       </div>
     </div>
   </footer>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref } from "vue";
 
-const currentYear = new Date().getFullYear()
+const currentYear = new Date().getFullYear();
 </script>
 
 <style scoped>
@@ -38,7 +44,7 @@ const currentYear = new Date().getFullYear()
   font-style: italic;
 }
 
-.contact-email{
+.contact-email {
   display: inline;
 }
 </style>
