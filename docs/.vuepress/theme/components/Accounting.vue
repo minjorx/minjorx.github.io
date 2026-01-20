@@ -853,7 +853,7 @@ onMounted(async () => {
   .accounting-app {
     width: 100%;
     max-width: 100%;
-    /* padding: 8px; */
+    padding: 8px;
     margin: 0;
   }
 
