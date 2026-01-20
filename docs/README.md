@@ -22,7 +22,7 @@ config:
         -
           theme: brand
           text: 工具
-          link: /tool/
+          link: /tools/
         -
           theme: alt
           text: Github →

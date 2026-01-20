@@ -537,6 +537,7 @@ onMounted(async () => {
   background-color: #f5f5f5;
   min-height: 100vh;
   box-sizing: border-box;
+  width: 100%;
 }
 
 .amount-display {
@@ -843,5 +844,96 @@ onMounted(async () => {
 
 .delete-btn:active {
   transform: translateY(0);
+}
+
+/* 响应式设计 */
+@media (max-width: 720px) {
+  .accounting-app {
+    width: 100%;
+    max-width: 100%;
+    /* padding: 8px; */
+    margin: 0;
+  }
+
+  .number-pad {
+    gap: 4px;
+  }
+
+  .number-btn {
+    height: 44px;
+    font-size: 1.1rem;
+  }
+
+  .current-amount {
+    font-size: 1.8rem;
+  }
+
+  .type-buttons {
+    gap: 6px;
+  }
+
+  .type-btn {
+    padding: 10px;
+    font-size: 0.9rem;
+  }
+
+  .tag-section,
+  .transaction-history {
+    padding: 12px;
+  }
+
+  .tag-section h3,
+  .transaction-history h3 {
+    font-size: 1rem;
+  }
+
+  .tag-item {
+    font-size: 0.75rem;
+    padding: 3px 6px;
+  }
+
+  .add-tag-section input {
+    font-size: 0.75rem;
+  }
+
+  .add-tag-section button {
+    font-size: 0.85rem;
+    padding: 5px 8px;
+  }
+
+  .transaction-item .expense,
+  .transaction-item .income {
+    font-size: 0.9rem;
+  }
+
+  .tags-list {
+    font-size: 0.75rem;
+  }
+
+  .transaction-footer {
+    font-size: 0.65rem;
+  }
+}
+
+@media (max-width: 320px) {
+  .accounting-app {
+    width: 100%;
+    max-width: 100%;
+    padding: 0px;
+    margin: 0;
+  }
+  .number-btn {
+    height: 40px;
+    font-size: 1rem;
+  }
+
+  .current-amount {
+    font-size: 1.6rem;
+  }
+
+  .type-btn {
+    padding: 8px;
+    font-size: 0.85rem;
+  }
 }
 </style>

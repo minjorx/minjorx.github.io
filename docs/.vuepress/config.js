@@ -33,7 +33,13 @@ export default defineUserConfig({
     // 配置站点图标
     ["link", { rel: "icon", type: "ico", href: "/favicon.ico" }],
   ],
-  bundler: viteBundler(),
+  bundler: viteBundler({
+    viteOptions: {
+      server: {
+        allowedHosts: ["minjor.51vip.biz"],
+      },
+    },
+  }),
   shouldPrefetch: true, // 站点较大，页面数量较多时，不建议启用
 
   theme: plumeTheme({
