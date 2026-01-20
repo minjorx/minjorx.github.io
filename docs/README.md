@@ -5,7 +5,6 @@ config:
   -
     type: hero
     full: true
-    forceDark: true
     hero:
       name: Minjor's Pages
       tagline: Some Blogs & Tools
