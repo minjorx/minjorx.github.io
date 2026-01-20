@@ -527,11 +527,7 @@ onMounted(async () => {
   </div>
 </template>
 
-<style>
-.vp-home-box {
-  padding: 0px !important;
-}
-</style>
+<style></style>
 
 <style scoped>
 .accounting-app {
@@ -540,7 +536,7 @@ onMounted(async () => {
   padding: 12px;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen,
     Ubuntu, Cantarell, "Open Sans", "Helvetica Neue", sans-serif;
-  background-color: #f5f5f5;
+  /* background-color: #f5f5f5; */
   min-height: 100vh;
   box-sizing: border-box;
   width: 100%;
@@ -550,9 +546,9 @@ onMounted(async () => {
   text-align: center;
   margin-bottom: 15px;
   padding: 12px;
-  background: #ffffff;
+  background: #ffffff80;
   border-radius: 10px;
-  color: #333;
+  /* color: #333; */
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
   border: 1px solid #e0e0e0;
 }
@@ -564,7 +560,7 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-family: "Courier New", monospace;
+  /* font-family: "Courier New", monospace; */
   color: #333;
 }
 
@@ -598,7 +594,7 @@ onMounted(async () => {
 }
 
 .number-btn {
-  background-color: white;
+  /* background-color: white; */
   border: 1px solid #e0e0e0;
   border-radius: 8px;
   height: 48px;
@@ -614,7 +610,7 @@ onMounted(async () => {
 }
 
 .number-btn:active {
-  background-color: #f5f5f5;
+  /* background-color: #f5f5f5; */
   transform: scale(0.95);
   box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.05);
 }
@@ -666,7 +662,7 @@ onMounted(async () => {
   margin-top: 18px;
   padding-top: 15px;
   border-top: 1px solid #e0e0e0;
-  background-color: white;
+  /* background-color: white; */
   padding: 15px;
   border-radius: 10px;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.03);
@@ -675,7 +671,7 @@ onMounted(async () => {
 .tag-section h3 {
   margin-top: 0;
   margin-bottom: 10px;
-  color: #333;
+  /* color: #333; */
   font-size: 1.1rem;
 }
 
@@ -689,7 +685,7 @@ onMounted(async () => {
 
 .tag-item {
   padding: 4px 8px;
-  background-color: #f5f5f5;
+  /* background-color: #f5f5f5; */
   border-radius: 15px;
   cursor: pointer;
   user-select: none;
@@ -748,7 +744,7 @@ onMounted(async () => {
 
 .transaction-history {
   margin-top: 18px;
-  background-color: white;
+  /* background-color: white; */
   padding: 15px;
   border-radius: 10px;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.03);
@@ -757,7 +753,7 @@ onMounted(async () => {
 .transaction-history h3 {
   margin-top: 0;
   margin-bottom: 10px;
-  color: #333;
+  /* color: #333; */
   font-size: 1.1rem;
 }
 
@@ -826,7 +822,7 @@ onMounted(async () => {
 }
 
 .delete-btn {
-  background-color: #f44336;
+  background-color: #f443368c;
   color: white;
   border: none;
   border-radius: 4px;
