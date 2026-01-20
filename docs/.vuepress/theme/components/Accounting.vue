@@ -527,6 +527,12 @@ onMounted(async () => {
   </div>
 </template>
 
+<style>
+.vp-home-box {
+  padding: 0px !important;
+}
+</style>
+
 <style scoped>
 .accounting-app {
   max-width: 360px;
