@@ -6,6 +6,7 @@ import { defineClientConfig } from "vuepress/client";
 
 import CustomComponent from "./theme/components/Custom.vue";
 import AccountingComponent from "./theme/components/Accounting.vue";
+import StatComponent from "./theme/components/Stat.vue";
 
 // import './theme/styles/custom.css'
 
@@ -19,5 +20,6 @@ export default defineClientConfig({
     // your custom components
     app.component("CustomComponent", CustomComponent);
     app.component("AccountingComponent", AccountingComponent);
+    app.component("StatComponent", StatComponent);
   },
 });

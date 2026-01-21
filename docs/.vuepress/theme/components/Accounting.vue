@@ -36,6 +36,58 @@ const combinedTags = computed(() => {
   return allTags;
 });
 
+// 格式化时间显示
+const formatTimeDisplay = (timestamp: string) => {
+  const date = new Date(timestamp);
+  const now = new Date();
+
+  const isToday =
+    date.getFullYear() === now.getFullYear() &&
+    date.getMonth() === now.getMonth() &&
+    date.getDate() === now.getDate();
+
+  const isThisMonth =
+    date.getFullYear() === now.getFullYear() &&
+    date.getMonth() === now.getMonth();
+
+  const isThisYear = date.getFullYear() === now.getFullYear();
+
+  let timeStr = "";
+
+  if (!isThisYear) {
+    // 不是今年，显示年月日
+    timeStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(
+      2,
+      "0"
+    )}-${String(date.getDate()).padStart(2, "0")} ${String(
+      date.getHours()
+    ).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}:${String(
+      date.getSeconds()
+    ).padStart(2, "0")}`;
+  } else if (!isThisMonth) {
+    // 不是本月，显示月日
+    timeStr = `${String(date.getMonth() + 1).padStart(2, "0")}-${String(
+      date.getDate()
+    ).padStart(2, "0")} ${String(date.getHours()).padStart(2, "0")}:${String(
+      date.getMinutes()
+    ).padStart(2, "0")}:${String(date.getSeconds()).padStart(2, "0")}`;
+  } else if (!isToday) {
+    // 不是今天，显示日
+    timeStr = `${String(date.getDate()).padStart(2, "0")} ${String(
+      date.getHours()
+    ).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}:${String(
+      date.getSeconds()
+    ).padStart(2, "0")}`;
+  } else {
+    // 今天，只显示时分秒
+    timeStr = `${String(date.getHours()).padStart(2, "0")}:${String(
+      date.getMinutes()
+    ).padStart(2, "0")}:${String(date.getSeconds()).padStart(2, "0")}`;
+  }
+
+  return timeStr;
+};
+
 // 数字键盘输入
 const handleNumberInput = (num: string) => {
   if (num === ".") {
@@ -89,7 +141,7 @@ const selectType = async (type: "expense" | "income") => {
   saveTransaction(parseFloat(amountInput.value), type);
 };
 
-// 删除交易记录
+// 删除收支记录
 const deleteTransaction = async (id: number) => {
   try {
     const db = await initDB();
@@ -150,7 +202,7 @@ const saveTransaction = async (amount: number, type: "expense" | "income") => {
         // 设置本次会话最新记录ID
         sessionLatestId.value = newTransaction.id;
 
-        // 限制交易记录数量
+        // 限制收支记录数量
         if (transactions.value.length > 100) {
           transactions.value = transactions.value.slice(0, 100);
         }
@@ -213,12 +265,12 @@ const updateTransactionTags = async (id: number, newTags: string[]) => {
             reject(updateRequest.error);
           };
         } else {
-          reject(new Error("未找到交易记录"));
+          reject(new Error("未找到收支记录"));
         }
       };
 
       request.onerror = () => {
-        console.error("获取交易记录失败:", request.error);
+        console.error("获取收支记录失败:", request.error);
         reject(request.error);
       };
     });
@@ -345,11 +397,11 @@ const toggleTag = (tag: string) => {
         updatedTags.push(tag);
       }
 
-      // 更新交易记录的标签
+      // 更新收支记录的标签
       updateTransactionTags(sessionLatestId.value, updatedTags);
     }
   } else if (sessionState.value === "未录入") {
-    // 未录入：可以选择标签，但不影响任何交易记录
+    // 未录入：可以选择标签，但不影响任何收支记录
     const index = selectedTags.value.indexOf(tag);
     if (index > -1) {
       selectedTags.value.splice(index, 1);
@@ -387,6 +439,17 @@ const addNewTag = () => {
 
     tagsInput.value = "";
   }
+};
+
+// 点击交易记录，设置为sessionLatestId
+const clickTransaction = (id: number) => {
+  sessionLatestId.value = id;
+  sessionState.value = "已录入";
+};
+
+// 跳转到统计页面
+const goToStatPage = () => {
+  window.location.href = "./stat.html";
 };
 
 onMounted(async () => {
@@ -499,12 +562,21 @@ onMounted(async () => {
 
     <!-- 交易历史 -->
     <div class="transaction-history">
-      <h3>最近交易</h3>
+      <div class="history-header">
+        <h3>最近收支</h3>
+        <a
+          href="./stat.html"
+          class="view-more-link"
+          @click.prevent="goToStatPage"
+          >查看更多</a
+        >
+      </div>
       <div
         v-for="tx in transactions.slice(0, 10)"
         :key="tx.id"
         class="transaction-item"
         :class="{ 'session-latest': isSessionLatest(tx.id) }"
+        @click="clickTransaction(tx.id)"
       >
         <div class="transaction-content">
           <span :class="tx.type === 'expense' ? 'expense' : 'income'">
@@ -515,10 +587,8 @@ onMounted(async () => {
           </span>
         </div>
         <div class="transaction-footer">
-          <span class="time">{{
-            new Date(tx.timestamp).toLocaleTimeString()
-          }}</span>
-          <button class="delete-btn" @click="deleteTransaction(tx.id)">
+          <span class="time">{{ formatTimeDisplay(tx.timestamp) }}</span>
+          <button class="delete-btn" @click.stop="deleteTransaction(tx.id)">
             ×
           </button>
         </div>
@@ -527,7 +597,11 @@ onMounted(async () => {
   </div>
 </template>
 
-<style></style>
+<style>
+.vp-home-box {
+  padding: 0px !important;
+}
+</style>
 
 <style scoped>
 .accounting-app {
@@ -750,11 +824,32 @@ onMounted(async () => {
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.03);
 }
 
-.transaction-history h3 {
-  margin-top: 0;
+.history-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   margin-bottom: 10px;
+}
+
+.history-header h3 {
+  margin-top: 0;
+  margin-bottom: 0;
   /* color: #333; */
   font-size: 1.1rem;
+}
+
+.view-more-link {
+  color: #2196f3;
+  text-decoration: none;
+  font-size: 0.9rem;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: background-color 0.15s ease;
+}
+
+.view-more-link:hover {
+  background-color: #e3f2fd;
+  text-decoration: underline;
 }
 
 .transaction-item {
@@ -764,6 +859,7 @@ onMounted(async () => {
   padding: 8px 0;
   border-bottom: 1px solid #eee;
   transition: background-color 0.15s ease;
+  cursor: pointer;
 }
 
 .transaction-item:last-child {
@@ -885,8 +981,13 @@ onMounted(async () => {
   }
 
   .tag-section h3,
-  .transaction-history h3 {
+  .history-header h3 {
     font-size: 1rem;
+  }
+
+  .view-more-link {
+    font-size: 0.8rem;
+    padding: 3px 6px;
   }
 
   .tag-item {
