@@ -459,15 +459,12 @@ onUnmounted(() => {
         <div v-if="showMenu" class="menu-dropdown">
           <ul class="menu-list">
             <li @click="syncFromCloud" class="menu-item">
-              <span class="menu-item-icon">☁️</span>
               <span>从云同步</span>
             </li>
             <li @click="uploadFromLocal" class="menu-item">
-              <span class="menu-item-icon">📤</span>
               <span>从本地上传</span>
             </li>
             <li @click="downloadToLocal" class="menu-item">
-              <span class="menu-item-icon">📥</span>
               <span>下载到本地</span>
             </li>
           </ul>
