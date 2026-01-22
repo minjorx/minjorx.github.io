@@ -23,7 +23,6 @@ echarts.use([
 // 数据状态
 const transactions = ref<any[]>([]);
 const loading = ref(true);
-const showMenu = ref(false);
 
 // 初始化 IndexedDB
 const initDB = async (): Promise<IDBDatabase> => {
@@ -45,7 +44,7 @@ const initDB = async (): Promise<IDBDatabase> => {
   });
 };
 
-// 加载所有交易数据
+// 从 IndexedDB 加载所有交易数据
 const loadAllTransactions = async () => {
   try {
     const db = await initDB();
@@ -372,37 +371,9 @@ const resizeCharts = () => {
   }
 };
 
-// 下拉菜单功能
-const toggleMenu = () => {
-  showMenu.value = !showMenu.value;
-};
-
-const closeMenu = () => {
-  showMenu.value = false;
-};
-
-// 模拟云同步功能
-const syncFromCloud = () => {
-  console.log("从云同步数据");
-  // 实际项目中这里会调用API进行数据同步
-  alert("已从云端同步数据");
-  closeMenu();
-};
-
-// 模拟本地上传功能
-const uploadFromLocal = () => {
-  console.log("从本地上传数据");
-  // 实际项目中这里会打开文件选择器上传数据
-  alert("已从本地上传数据");
-  closeMenu();
-};
-
-// 模拟下载到本地功能
-const downloadToLocal = () => {
-  console.log("下载数据到本地");
-  // 实际项目中这里会导出数据为JSON或其他格式
-  alert("已下载数据到本地");
-  closeMenu();
+// 跳转到同步页面
+const goToSyncPage = () => {
+  window.location.href = "./sync"; // 或者使用 router.push("/sync") 如果使用 Vue Router
 };
 
 onMounted(async () => {
@@ -417,21 +388,6 @@ onMounted(async () => {
 
   // 监听窗口大小变化
   window.addEventListener("resize", resizeCharts);
-
-  // 监听点击事件来关闭菜单
-  document.addEventListener("click", (event) => {
-    const menuButton = document.querySelector(".menu-button");
-    const menuDropdown = document.querySelector(".menu-dropdown");
-
-    if (
-      menuButton &&
-      !menuButton.contains(event.target as Node) &&
-      menuDropdown &&
-      !menuDropdown.contains(event.target as Node)
-    ) {
-      closeMenu();
-    }
-  });
 });
 
 // 组件卸载时清理事件监听器
@@ -450,26 +406,7 @@ onUnmounted(() => {
   <div class="stat-page">
     <header class="page-header">
       <h1>统计</h1>
-      <!-- 下拉菜单 -->
-      <div class="menu-container">
-        <button class="menu-button" @click.stop="toggleMenu">
-          <span class="menu-icon">⋮</span>
-        </button>
-
-        <div v-if="showMenu" class="menu-dropdown">
-          <ul class="menu-list">
-            <li @click="syncFromCloud" class="menu-item">
-              <span>从云同步</span>
-            </li>
-            <li @click="uploadFromLocal" class="menu-item">
-              <span>从本地上传</span>
-            </li>
-            <li @click="downloadToLocal" class="menu-item">
-              <span>下载到本地</span>
-            </li>
-          </ul>
-        </div>
-      </div>
+      <button class="sync-button" @click="goToSyncPage">同步数据</button>
     </header>
 
     <!-- 指标卡片 -->
@@ -523,67 +460,20 @@ onUnmounted(() => {
   font-size: 1.8rem;
 }
 
-.menu-container {
-  position: relative;
-  display: inline-block;
-}
-
-.menu-button {
-  background: none;
+.sync-button {
+  padding: 10px 20px;
+  background: rgba(255, 255, 255, 0.5);
   border: none;
-  cursor: pointer;
-  padding: 8px;
-  border-radius: 50%;
-  transition: background-color 0.2s;
-  font-size: 1.5rem;
-}
-
-.menu-button:hover {
-  background-color: rgba(0, 0, 0, 0.1);
-}
-
-.menu-icon {
-  display: block;
-}
-
-.menu-dropdown {
-  position: absolute;
-  top: 100%;
-  right: 0;
-  background-color: rgba(255, 255, 255, 0.5);
-  backdrop-filter: blur(10px);
   border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-  z-index: 1000;
-  overflow: hidden;
-}
-
-.menu-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  min-width: 200px;
-}
-
-.menu-item {
-  display: flex;
-  align-items: center;
-  padding: 4px 8px;
   cursor: pointer;
+  font-size: 1rem;
   transition: background-color 0.2s;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
-.menu-item:hover {
+.sync-button:hover {
   background-color: rgba(0, 0, 0, 0.05);
-}
-
-.dark .menu-item:hover {
-  background-color: rgba(255, 255, 255, 0.1);
-}
-
-.menu-item-icon {
-  margin-right: 12px;
-  font-size: 1.2rem;
 }
 
 .metrics-section {
@@ -639,6 +529,8 @@ onUnmounted(() => {
 
   .page-header {
     padding: 0 10px;
+    flex-direction: column;
+    gap: 15px;
   }
 
   .metrics-section {
