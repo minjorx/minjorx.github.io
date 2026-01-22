@@ -371,11 +371,6 @@ const resizeCharts = () => {
   }
 };
 
-// 跳转到同步页面
-const goToSyncPage = () => {
-  window.location.href = "./sync"; // 或者使用 router.push("/sync") 如果使用 Vue Router
-};
-
 onMounted(async () => {
   await loadAllTransactions();
   loading.value = false;
@@ -400,13 +395,18 @@ onUnmounted(() => {
   }
   window.removeEventListener("resize", resizeCharts);
 });
+
+// 返回上一页
+const goBack = () => {
+  window.history.back();
+};
 </script>
 
 <template>
-  <div class="stat-page">
+  <div class="stat-page app">
     <header class="page-header">
       <h1>统计</h1>
-      <button class="sync-button" @click="goToSyncPage">同步数据</button>
+      <button class="sync-button" @click="goBack">返回</button>
     </header>
 
     <!-- 指标卡片 -->
@@ -457,19 +457,15 @@ onUnmounted(() => {
 
 .page-header h1 {
   margin: 0;
+  margin-left: 20px;
   font-size: 1.8rem;
 }
 
 .sync-button {
-  padding: 10px 20px;
+  padding: 5px 10px;
   background: rgba(255, 255, 255, 0.5);
-  border: none;
-  border-radius: 8px;
-  cursor: pointer;
   font-size: 1rem;
   transition: background-color 0.2s;
-  backdrop-filter: blur(10px);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
 .sync-button:hover {
@@ -510,7 +506,7 @@ onUnmounted(() => {
 .daily-stats-section,
 .monthly-stats-section {
   margin-bottom: 40px;
-  padding: 20px;
+  padding: 0px;
   border-radius: 8px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
@@ -540,6 +536,34 @@ onUnmounted(() => {
 
   .metric-card {
     min-width: 100%;
+  }
+}
+.app {
+  max-width: 360px;
+  margin: 0 auto;
+  padding: 12px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen,
+    Ubuntu, Cantarell, "Open Sans", "Helvetica Neue", sans-serif;
+  /* background-color: #f5f5f5; */
+  min-height: 100vh;
+  box-sizing: border-box;
+  width: 100%;
+}
+
+@media (max-width: 720px) {
+  .app {
+    width: 100%;
+    max-width: 100%;
+    padding: 8px;
+    margin: 0;
+  }
+}
+@media (max-width: 320px) {
+  .app {
+    width: 100%;
+    max-width: 100%;
+    padding: 0px;
+    margin: 0;
   }
 }
 </style>

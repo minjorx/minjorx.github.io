@@ -267,7 +267,7 @@ const uploadFromLocal = async () => {
     return; // 直接退出，不显示 loading，也不报错
   }
 
-  // 用户选择了文件，现在才开始“同步”
+  // 用户选择了文件，现在才开始"同步"
   isSyncing.value = true;
   try {
     const content = await file.text();
@@ -321,10 +321,10 @@ const goBack = () => {
 </script>
 
 <template>
-  <div class="sync-page">
+  <div class="sync-page app">
     <header class="page-header">
       <h1>数据同步</h1>
-      <button class="back-button" @click="goBack">← 返回</button>
+      <button class="back-button" @click="goBack">返回</button>
     </header>
 
     <div class="sync-actions">
@@ -340,6 +340,62 @@ const goBack = () => {
       <button @click="downloadToLocal" :disabled="isSyncing" class="sync-btn">
         导出到本地 JSON
       </button>
+      <div class="action-description">
+        <p>
+          <strong>上传到 Gitee：</strong>将本地数据库中的所有数据上传到 Gitee
+          代码片段。
+        </p>
+        <p>
+          <strong>数据同步逻辑：</strong>完全替换 Gitee
+          上的数据，不会保留原有的数据。
+        </p>
+        <p>
+          <strong>限制：</strong>需要有效的 Gitee 授权，仅支持上传 JSON
+          格式数据。
+        </p>
+      </div>
+
+      <div class="action-description">
+        <p>
+          <strong>从 Gitee 下载：</strong>从 Gitee
+          代码片段下载数据并合并到本地数据库。
+        </p>
+        <p>
+          <strong>数据同步逻辑：</strong>智能合并，相同 ID
+          的记录会被更新，新记录会被添加，不会重复。
+        </p>
+        <p>
+          <strong>限制：</strong>需要有效的 Gitee 授权，仅支持 JSON 格式数据。
+        </p>
+      </div>
+
+      <div class="action-description">
+        <p>
+          <strong>从本地 JSON 导入：</strong>选择本地 JSON
+          文件导入数据到本地数据库。
+        </p>
+        <p>
+          <strong>数据同步逻辑：</strong>智能合并，相同 ID
+          的记录会被更新，新记录会被添加，不会重复。
+        </p>
+        <p>
+          <strong>限制：</strong>仅支持 JSON 格式文件，需要符合数据结构要求。
+        </p>
+      </div>
+
+      <div class="action-description">
+        <p>
+          <strong>导出到本地 JSON：</strong>将本地数据库中的所有数据导出为 JSON
+          文件。
+        </p>
+        <p>
+          <strong>数据同步逻辑：</strong
+          >完整导出本地所有数据，不会影响原有数据。
+        </p>
+        <p>
+          <strong>限制：</strong>导出的文件格式为 JSON，可用于备份或迁移数据。
+        </p>
+      </div>
     </div>
 
     <div v-if="isSyncing" class="loading">正在同步数据...</div>
@@ -365,17 +421,15 @@ const goBack = () => {
 }
 
 .page-header h1 {
+  margin-left: 20px;
   margin: 0;
   font-size: 1.8rem;
 }
 
 .back-button {
-  background: none;
-  border: none;
-  cursor: pointer;
-  padding: 8px;
-  border-radius: 50%;
-  font-size: 1.5rem;
+  padding: 5px 10px;
+  background: rgba(255, 255, 255, 0.5);
+  font-size: 1rem;
   transition: background-color 0.2s;
 }
 
@@ -386,7 +440,7 @@ const goBack = () => {
 .sync-actions {
   display: grid;
   gap: 16px;
-  max-width: 400px;
+  max-width: 600px;
   margin: 0 auto;
 }
 
@@ -412,6 +466,23 @@ const goBack = () => {
   cursor: not-allowed;
 }
 
+.action-description {
+  padding: 12px;
+  background-color: #f9f9f9;
+  border-radius: 8px;
+  border-left: 4px solid #409eff;
+  margin-bottom: 20px;
+}
+
+.action-description p {
+  margin: 8px 0;
+  line-height: 1.5;
+}
+
+.action-description strong {
+  color: #333;
+}
+
 .loading {
   text-align: center;
   padding: 40px;
@@ -430,6 +501,39 @@ const goBack = () => {
 
   .sync-actions {
     max-width: 100%;
+  }
+
+  .action-description {
+    padding: 10px;
+    font-size: 0.9rem;
+  }
+}
+.app {
+  max-width: 360px;
+  margin: 0 auto;
+  padding: 12px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen,
+    Ubuntu, Cantarell, "Open Sans", "Helvetica Neue", sans-serif;
+  /* background-color: #f5f5f5; */
+  min-height: 100vh;
+  box-sizing: border-box;
+  width: 100%;
+}
+
+@media (max-width: 720px) {
+  .app {
+    width: 100%;
+    max-width: 100%;
+    padding: 8px;
+    margin: 0;
+  }
+}
+@media (max-width: 320px) {
+  .app {
+    width: 100%;
+    max-width: 100%;
+    padding: 0px;
+    margin: 0;
   }
 }
 </style>

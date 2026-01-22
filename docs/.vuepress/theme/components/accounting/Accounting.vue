@@ -457,13 +457,19 @@ onMounted(async () => {
   await initDB();
   await loadHistory();
 });
+
+// 跳转到同步页面
+const goToSyncPage = () => {
+  window.location.href = "./sync"; // 或者使用 router.push("/sync") 如果使用 Vue Router
+};
 </script>
 
 <template>
-  <div
-    class="accounting-app"
-    style="user-select: none; -webkit-user-select: none"
-  >
+  <div class="app" style="user-select: none; -webkit-user-select: none">
+    <header class="page-header">
+      <h1>记账本</h1>
+      <button class="sync-button" @click="goToSyncPage">同步数据</button>
+    </header>
     <!-- 显示当前输入金额 -->
     <div class="amount-display">
       <div class="type-indicator-container">
@@ -604,7 +610,7 @@ onMounted(async () => {
 </style>
 
 <style scoped>
-.accounting-app {
+.app {
   max-width: 360px;
   margin: 0 auto;
   padding: 12px;
@@ -946,7 +952,7 @@ onMounted(async () => {
 
 /* 响应式设计 */
 @media (max-width: 720px) {
-  .accounting-app {
+  .app {
     width: 100%;
     max-width: 100%;
     padding: 8px;
@@ -1019,7 +1025,7 @@ onMounted(async () => {
 }
 
 @media (max-width: 320px) {
-  .accounting-app {
+  .app {
     width: 100%;
     max-width: 100%;
     padding: 0px;
@@ -1038,5 +1044,19 @@ onMounted(async () => {
     padding: 8px;
     font-size: 0.85rem;
   }
+}
+
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  text-align: center;
+  margin-bottom: 30px;
+}
+
+.page-header h1 {
+  margin: 0;
+  margin-left: 20px;
+  font-size: 1.8rem;
 }
 </style>
