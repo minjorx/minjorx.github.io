@@ -24,6 +24,18 @@ echarts.use([
 const transactions = ref<any[]>([]);
 const loading = ref(true);
 
+// 分页状态
+const currentPage = ref(1);
+const pageSize = ref(10);
+const total = computed(() => transactions.value.length);
+
+// 计算当前页的数据
+const currentData = computed(() => {
+  const start = (currentPage.value - 1) * pageSize.value;
+  const end = start + pageSize.value;
+  return transactions.value.slice(start, end);
+});
+
 // 初始化 IndexedDB
 const initDB = async (): Promise<IDBDatabase> => {
   return new Promise((resolve, reject) => {
@@ -200,7 +212,7 @@ const renderDailyChart = () => {
   if (dailyChartInstance) {
     const option = {
       title: {
-        text: "最近30天支出趋势",
+        text: "最近30天收支趋势",
         left: "center",
       },
       tooltip: {
@@ -224,7 +236,7 @@ const renderDailyChart = () => {
         },
       },
       legend: {
-        data: ["支出"],
+        data: ["收入", "支出"],
         top: "10%",
       },
       grid: {
@@ -259,6 +271,15 @@ const renderDailyChart = () => {
       ],
       series: [
         {
+          name: "收入",
+          type: "bar",
+          color: "#4caf50",
+          emphasis: {
+            focus: "series",
+          },
+          data: dailyStats.value.map((item) => item.income),
+        },
+        {
           name: "支出",
           type: "bar",
           color: "#f06292",
@@ -288,7 +309,7 @@ const renderMonthlyChart = () => {
   if (monthlyChartInstance) {
     const option = {
       title: {
-        text: "最近12个月支出汇总",
+        text: "最近12个月收支汇总",
         left: "center",
       },
       tooltip: {
@@ -312,7 +333,7 @@ const renderMonthlyChart = () => {
         },
       },
       legend: {
-        data: ["支出"],
+        data: ["收入", "支出"],
         top: "10%",
       },
       grid: {
@@ -345,6 +366,15 @@ const renderMonthlyChart = () => {
         },
       ],
       series: [
+        {
+          name: "收入",
+          type: "bar",
+          color: "#4caf50",
+          emphasis: {
+            focus: "series",
+          },
+          data: monthlyStats.value.map((item) => item.income),
+        },
         {
           name: "支出",
           type: "bar",
@@ -398,7 +428,20 @@ onUnmounted(() => {
 
 // 返回上一页
 const goBack = () => {
-  window.history.back();
+  window.location.href = "./accounting";
+};
+
+// 切换页码
+const changePage = (page: number) => {
+  currentPage.value = page;
+};
+
+// 格式化标签为字符串
+const formatTags = (tags: string[]) => {
+  if (!tags || !Array.isArray(tags) || tags.length === 0) {
+    return "-";
+  }
+  return tags.join(", ");
 };
 </script>
 
@@ -425,6 +468,54 @@ const goBack = () => {
     <!-- 最近一年统计 -->
     <section class="monthly-stats-section">
       <div id="monthly-chart" style="height: 400px; width: 100%"></div>
+    </section>
+
+    <!-- 分页表格 -->
+    <section class="table-section">
+      <h2>交易记录</h2>
+      <table class="transaction-table">
+        <thead>
+          <tr>
+            <th>日期</th>
+            <th>类型</th>
+            <th>标签</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="item in currentData" :key="item.id">
+            <td>{{ new Date(item.timestamp).toLocaleString() }}</td>
+            <td>
+              <span :class="['type-tag', item.type]">{{
+                item.type === "income" ? "收入" : "支出"
+              }}</span>
+            </td>
+            <td>{{ formatTags(item.tags) }}</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <!-- 分页控件 -->
+      <div class="pagination">
+        <button
+          @click="changePage(currentPage - 1)"
+          :disabled="currentPage === 1"
+          class="pagination-btn"
+        >
+          上一页
+        </button>
+
+        <span class="pagination-info">
+          第 {{ currentPage }} 页，共 {{ Math.ceil(total / pageSize) }} 页
+        </span>
+
+        <button
+          @click="changePage(currentPage + 1)"
+          :disabled="currentPage >= Math.ceil(total / pageSize)"
+          class="pagination-btn"
+        >
+          下一页
+        </button>
+      </div>
     </section>
 
     <!-- 加载提示 -->
@@ -457,7 +548,6 @@ const goBack = () => {
 
 .page-header h1 {
   margin: 0;
-  margin-left: 20px;
   font-size: 1.8rem;
 }
 
@@ -511,6 +601,83 @@ const goBack = () => {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
+.table-section {
+  margin-top: 20px;
+}
+
+.table-section h2 {
+  margin-bottom: 15px;
+  font-size: 1.4rem;
+}
+
+.transaction-table {
+  width: 100%;
+  border-collapse: collapse;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.transaction-table th,
+.transaction-table td {
+  padding: 12px;
+  text-align: left;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.transaction-table th {
+  background-color: #f5f5f5;
+  font-weight: bold;
+}
+
+.type-tag {
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  font-weight: bold;
+}
+
+.type-tag.income {
+  background-color: #e8f5e9;
+  color: #2e7d32;
+}
+
+.type-tag.expense {
+  background-color: #ffebee;
+  color: #c62828;
+}
+
+.pagination {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-top: 20px;
+  gap: 15px;
+}
+
+.pagination-btn {
+  padding: 8px 15px;
+  border: 1px solid #ddd;
+  background-color: white;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+
+.pagination-btn:hover:not(:disabled) {
+  background-color: #f5f5f5;
+}
+
+.pagination-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.pagination-info {
+  font-size: 0.9rem;
+  color: #666;
+}
+
 .loading {
   text-align: center;
   padding: 40px;
@@ -537,9 +704,27 @@ const goBack = () => {
   .metric-card {
     min-width: 100%;
   }
+
+  .transaction-table {
+    font-size: 0.85rem;
+  }
+
+  .transaction-table th,
+  .transaction-table td {
+    padding: 8px 6px;
+  }
+
+  .pagination {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .pagination-btn {
+    width: 100px;
+  }
 }
 .app {
-  max-width: 360px;
+  max-width: 720px;
   margin: 0 auto;
   padding: 12px;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen,

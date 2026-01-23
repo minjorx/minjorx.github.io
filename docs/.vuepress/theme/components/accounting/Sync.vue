@@ -316,7 +316,9 @@ const downloadToLocal = async () => {
 
 // 返回上一页
 const goBack = () => {
-  window.history.back();
+  // window.history.back();
+  // 固定跳转到 ./accounting
+  window.location.href = "./accounting";
 };
 </script>
 
@@ -509,7 +511,7 @@ const goBack = () => {
   }
 }
 .app {
-  max-width: 360px;
+  max-width: 720px;
   margin: 0 auto;
   padding: 12px;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen,

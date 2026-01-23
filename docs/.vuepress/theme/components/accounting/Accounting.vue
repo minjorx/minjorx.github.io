@@ -611,7 +611,7 @@ const goToSyncPage = () => {
 
 <style scoped>
 .app {
-  max-width: 360px;
+  max-width: 720px;
   margin: 0 auto;
   padding: 12px;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen,
