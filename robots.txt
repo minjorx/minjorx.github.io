@@ -1,0 +1,3 @@
+Sitemap: https://blog.minjor.com/sitemap.xml
+User-agent:*
+Disallow:
