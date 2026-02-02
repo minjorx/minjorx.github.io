@@ -443,6 +443,22 @@ const formatTags = (tags: string[]) => {
   }
   return tags.join(", ");
 };
+
+function formatDate(timestamp: number) {
+  // 假设 item.timestamp 是一个有效的时间戳（毫秒）
+  const date = new Date(timestamp);
+
+  // 如果 timestamp 可能不是毫秒，请根据情况转换
+  // 例如，如果是秒，则 new Date(timestamp * 1000);
+
+  const year = String(date.getFullYear()).slice(-2); // 获取年份后两位
+  const month = String(date.getMonth() + 1).padStart(2, '0'); // getMonth() 从 0 开始，需 +1
+  const day = String(date.getDate()).padStart(2, '0');
+  const hours = String(date.getHours()).padStart(2, '0');
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+
+  return `${year}-${month}-${day} ${hours}:${minutes}`;
+}
 </script>
 
 <template>
@@ -478,17 +494,19 @@ const formatTags = (tags: string[]) => {
           <tr>
             <th>日期</th>
             <th>类型</th>
+            <th>金额</th>  <!-- 新增金额列 -->
             <th>标签</th>
           </tr>
         </thead>
         <tbody>
           <tr v-for="item in currentData" :key="item.id">
-            <td>{{ new Date(item.timestamp).toLocaleString() }}</td>
+            <td>{{ formatDate(item.timestamp) }}</td>
             <td>
               <span :class="['type-tag', item.type]">{{
                 item.type === "income" ? "收入" : "支出"
               }}</span>
             </td>
+            <td>¥{{ item.amount.toFixed(2) }}</td>  <!-- 显示金额 -->
             <td>{{ formatTags(item.tags) }}</td>
           </tr>
         </tbody>
@@ -559,7 +577,7 @@ const formatTags = (tags: string[]) => {
 }
 
 .sync-button:hover {
-  background-color: rgba(0, 0, 0, 0.05);
+  background-color: rgba(0, 0, 0, 0.1);
 }
 
 .metrics-section {
@@ -590,7 +608,7 @@ const formatTags = (tags: string[]) => {
 }
 
 .metric-value.negative {
-  color: #ad1457;
+  color: #ad1456bb;
 }
 
 .daily-stats-section,
@@ -613,7 +631,7 @@ const formatTags = (tags: string[]) => {
 .transaction-table {
   width: 100%;
   border-collapse: collapse;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.623);
   border-radius: 8px;
   overflow: hidden;
 }
@@ -626,7 +644,7 @@ const formatTags = (tags: string[]) => {
 }
 
 .transaction-table th {
-  background-color: #f5f5f5;
+  background-color: #f5f5f5a9;
   font-weight: bold;
 }
 
@@ -639,12 +657,12 @@ const formatTags = (tags: string[]) => {
 
 .type-tag.income {
   background-color: #e8f5e9;
-  color: #2e7d32;
+  color: #2e7d32a1;
 }
 
 .type-tag.expense {
-  background-color: #ffebee;
-  color: #c62828;
+  background-color: #ffebee81;
+  color: #c6282880;
 }
 
 .pagination {
@@ -657,15 +675,15 @@ const formatTags = (tags: string[]) => {
 
 .pagination-btn {
   padding: 8px 15px;
-  border: 1px solid #ddd;
-  background-color: white;
+  border: 1px solid #dddddd7e;
+  background-color: rgba(255, 255, 255, 0.466);
   cursor: pointer;
   border-radius: 4px;
   transition: all 0.2s;
 }
 
 .pagination-btn:hover:not(:disabled) {
-  background-color: #f5f5f5;
+  background-color: #f5f5f57e;
 }
 
 .pagination-btn:disabled {
@@ -675,7 +693,7 @@ const formatTags = (tags: string[]) => {
 
 .pagination-info {
   font-size: 0.9rem;
-  color: #666;
+  color: #66666671;
 }
 
 .loading {

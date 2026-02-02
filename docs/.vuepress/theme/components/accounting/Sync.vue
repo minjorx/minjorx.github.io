@@ -472,7 +472,7 @@ const goBack = () => {
   padding: 12px;
   background-color: #f9f9f9;
   border-radius: 8px;
-  border-left: 4px solid #409eff;
+  border-left: 4px solid #40a0ffcb;
   margin-bottom: 20px;
 }
 
@@ -482,7 +482,7 @@ const goBack = () => {
 }
 
 .action-description strong {
-  color: #333;
+  color: #333333b6;
 }
 
 .loading {

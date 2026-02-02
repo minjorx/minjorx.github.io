@@ -630,7 +630,7 @@ const goToSyncPage = () => {
   border-radius: 10px;
   /* color: #333; */
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
-  border: 1px solid #e0e0e0;
+  border: 1px solid #e0e0e0c9;
 }
 
 .current-amount {
@@ -641,7 +641,7 @@ const goToSyncPage = () => {
   align-items: center;
   justify-content: center;
   /* font-family: "Courier New", monospace; */
-  color: #333;
+  color: #333333c2;
 }
 
 .type-indicator-container {
@@ -657,13 +657,13 @@ const goToSyncPage = () => {
 }
 
 .type-indicator.expense {
-  background-color: #ffebee;
-  color: #d32f2f;
+  background-color: #ffebeecc;
+  color: #d32f2fc5;
 }
 
 .type-indicator.income {
   background-color: #e8f5e9;
-  color: #388e3c;
+  color: #388e3cc0;
 }
 
 .number-pad {
@@ -675,7 +675,7 @@ const goToSyncPage = () => {
 
 .number-btn {
   /* background-color: white; */
-  border: 1px solid #e0e0e0;
+  border: 1px solid #e0e0e0c7;
   border-radius: 8px;
   height: 48px;
   display: flex;
@@ -721,12 +721,12 @@ const goToSyncPage = () => {
 
 .expense-btn {
   background-color: #f44336;
-  color: white;
+  color: rgba(255, 255, 255, 0.774);
 }
 
 .income-btn {
-  background-color: #4caf50;
-  color: white;
+  background-color: #4caf4fd0;
+  color: rgba(255, 255, 255, 0.767);
 }
 
 .type-btn:not(:disabled):hover {
@@ -741,7 +741,7 @@ const goToSyncPage = () => {
 .tag-section {
   margin-top: 18px;
   padding-top: 15px;
-  border-top: 1px solid #e0e0e0;
+  border-top: 1px solid #e0e0e0c0;
   /* background-color: white; */
   padding: 15px;
   border-radius: 10px;
@@ -770,18 +770,18 @@ const goToSyncPage = () => {
   cursor: pointer;
   user-select: none;
   transition: all 0.15s ease;
-  border: 1px solid #e0e0e0;
+  border: 1px solid #e0e0e0c5;
   font-size: 0.8rem;
 }
 
 .tag-item:hover {
-  background-color: #e0e0e0;
+  background-color: #e0e0e0c7;
 }
 
 .tag-item.active {
-  background-color: #2196f3;
-  color: white;
-  border-color: #1976d2;
+  background-color: #2195f3c4;
+  color: rgba(255, 255, 255, 0.767);
+  border-color: #1976d2c4;
 }
 
 .add-tag-section {
@@ -793,7 +793,7 @@ const goToSyncPage = () => {
 .add-tag-section input {
   flex: 1;
   padding: 6px 8px;
-  border: 1px solid #e0e0e0;
+  border: 1px solid #e0e0e0bd;
   border-radius: 6px;
   font-size: 0.8rem;
   transition: border-color 0.15s ease;
@@ -801,14 +801,14 @@ const goToSyncPage = () => {
 
 .add-tag-section input:focus {
   outline: none;
-  border-color: #2196f3;
+  border-color: #2195f3cb;
   box-shadow: 0 0 0 1px rgba(33, 150, 243, 0.2);
 }
 
 .add-tag-section button {
   padding: 6px 10px;
-  background-color: #2196f3;
-  color: white;
+  background-color: #2195f3c7;
+  color: rgba(255, 255, 255, 0.753);
   border: none;
   border-radius: 6px;
   cursor: pointer;
@@ -845,7 +845,7 @@ const goToSyncPage = () => {
 }
 
 .view-more-link {
-  color: #2196f3;
+  color: #2195f3bb;
   text-decoration: none;
   font-size: 0.9rem;
   padding: 4px 8px;
@@ -854,7 +854,7 @@ const goToSyncPage = () => {
 }
 
 .view-more-link:hover {
-  background-color: #e3f2fd;
+  background-color: #e3f2fdc2;
   text-decoration: underline;
 }
 
@@ -863,7 +863,7 @@ const goToSyncPage = () => {
   flex-direction: column;
   justify-content: space-between;
   padding: 8px 0;
-  border-bottom: 1px solid #eee;
+  border-bottom: 1px solid #eeeeeec9;
   transition: background-color 0.15s ease;
   cursor: pointer;
 }
@@ -873,15 +873,15 @@ const goToSyncPage = () => {
 }
 
 .transaction-item:hover {
-  background-color: #fafafa;
+  background-color: #fafafac9;
 }
 
 .transaction-item.session-latest {
-  background-color: #fffde7;
+  background-color: #fffde7c5;
   border-radius: 6px;
   padding: 8px 10px;
   margin: -2px -10px;
-  border-left: 3px solid #ffc107;
+  border-left: 3px solid #ffc107d2;
 }
 
 .transaction-content {
@@ -906,7 +906,7 @@ const goToSyncPage = () => {
 .tags-list {
   flex: 1;
   margin: 0 8px;
-  color: #666;
+  color: #666666b6;
   font-size: 0.8rem;
   word-break: break-all;
 }
@@ -916,16 +916,16 @@ const goToSyncPage = () => {
   justify-content: space-between;
   align-items: center;
   font-size: 0.7rem;
-  color: #999;
+  color: #999999c4;
 }
 
 .time {
-  color: #999;
+  color: #999999b0;
 }
 
 .delete-btn {
-  background-color: #f443368c;
-  color: white;
+  background-color: #f44336b6;
+  color: rgba(255, 255, 255, 0.767);
   border: none;
   border-radius: 4px;
   padding: 4px 8px;
@@ -941,7 +941,7 @@ const goToSyncPage = () => {
 }
 
 .delete-btn:hover {
-  background-color: #d32f2f;
+  background-color: #d32f2fb9;
   transform: translateY(-1px);
   box-shadow: 0 2px 4px rgba(244, 67, 54, 0.3);
 }
