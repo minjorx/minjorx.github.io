@@ -452,10 +452,10 @@ function formatDate(timestamp: number) {
   // 例如，如果是秒，则 new Date(timestamp * 1000);
 
   const year = String(date.getFullYear()).slice(-2); // 获取年份后两位
-  const month = String(date.getMonth() + 1).padStart(2, '0'); // getMonth() 从 0 开始，需 +1
-  const day = String(date.getDate()).padStart(2, '0');
-  const hours = String(date.getHours()).padStart(2, '0');
-  const minutes = String(date.getMinutes()).padStart(2, '0');
+  const month = String(date.getMonth() + 1).padStart(2, "0"); // getMonth() 从 0 开始，需 +1
+  const day = String(date.getDate()).padStart(2, "0");
+  const hours = String(date.getHours()).padStart(2, "0");
+  const minutes = String(date.getMinutes()).padStart(2, "0");
 
   return `${year}-${month}-${day} ${hours}:${minutes}`;
 }
@@ -494,7 +494,8 @@ function formatDate(timestamp: number) {
           <tr>
             <th>日期</th>
             <th>类型</th>
-            <th>金额</th>  <!-- 新增金额列 -->
+            <th>金额</th>
+            <!-- 新增金额列 -->
             <th>标签</th>
           </tr>
         </thead>
@@ -506,7 +507,8 @@ function formatDate(timestamp: number) {
                 item.type === "income" ? "收入" : "支出"
               }}</span>
             </td>
-            <td>¥{{ item.amount.toFixed(2) }}</td>  <!-- 显示金额 -->
+            <td>¥{{ item.amount.toFixed(2) }}</td>
+            <!-- 显示金额 -->
             <td>{{ formatTags(item.tags) }}</td>
           </tr>
         </tbody>
