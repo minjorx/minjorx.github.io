@@ -509,7 +509,6 @@ const renderMonthlyTaggedChart = () => {
             result +=
               param.marker +
               (param.seriesName === "收入" ? "+" : "-") +
-              "¥" +
               value.toLocaleString(undefined, {
                 maximumFractionDigits: 2,
               }) +
@@ -520,7 +519,7 @@ const renderMonthlyTaggedChart = () => {
             (m) => m.month === params[0].name
           );
           if (monthData) {
-            result += `<br/>¥${monthData.net.toLocaleString(undefined, {
+            result += `<br/>${monthData.net.toLocaleString(undefined, {
               maximumFractionDigits: 2,
             })}`;
           }
@@ -557,7 +556,7 @@ const renderMonthlyTaggedChart = () => {
           name: "金额 (¥)",
           position: "left",
           axisLabel: {
-            formatter: "¥{value}",
+            formatter: "{value}",
           },
         },
       ],
@@ -603,20 +602,7 @@ const renderCalendarChart = () => {
     const month = currentCalendarMonth.value.getMonth() + 1;
     const weeks = calendarWeekData.value;
 
-    // 计算所有数据的最大值和最小值用于颜色映射
-    let minVal = 0;
-    let maxVal = 0;
-    const allValues = calendarHeatmapData.value.map((d) => d[1]);
-    if (allValues.length > 0) {
-      minVal = Math.min(...allValues, 0);
-      maxVal = Math.max(...allValues, 0);
-    }
-
     const option = {
-      title: {
-        text: `${year}年${String(month).padStart(2, "0")}月每日净值`,
-        left: "center",
-      },
       tooltip: {
         formatter: function (params: any) {
           if (!params.data || !params.data.date) {
@@ -634,31 +620,12 @@ const renderCalendarChart = () => {
         },
       },
       visualMap: {
-        type: "piecewise",
-        calculable: true,
-        orient: "horizontal",
-        left: "center",
-        bottom: "bottom",
-        textStyle: {
-          color: "#000",
+        show: false,
+        min: 0,
+        max: 1,
+        inRange: {
+          color: "#ffffff",
         },
-        pieces: [
-          {
-            label: "¥0",
-            eq: 0,
-            color: "#FFFFFF",
-          },
-          {
-            label: "+¥",
-            gt: 0,
-            color: "#4CAF50",
-          },
-          {
-            label: "-¥",
-            lt: 0,
-            color: "#F44336",
-          },
-        ],
       },
       grid: {
         left: "5%",
@@ -700,14 +667,12 @@ const renderCalendarChart = () => {
       ],
       series: [
         {
-          name: "每日净支出",
+          name: "每日收支",
           type: "heatmap",
           data: (() => {
             const heatmapData: any[] = [];
             weeks.forEach((week, weekIndex) => {
-              console.log(week);
               week.forEach((day: any) => {
-                console.log(day.date);
                 heatmapData.push({
                   value: [
                     day.dayIndex,
@@ -730,7 +695,7 @@ const renderCalendarChart = () => {
               if (value === 0) {
                 return `{day|${day}}`;
               }
-              return `{day|${day}}\n{value|${value >= 0 ? "+" : "-"}¥${Math.abs(
+              return `{day|${day}}\n{value|${value >= 0 ? "+" : "-"}${Math.abs(
                 value
               ).toFixed(2)}}`;
             },
@@ -902,35 +867,33 @@ const goToCurrentMonth = () => {
     <!-- 指标卡片 -->
     <section class="metrics-section">
       <div class="metric-card expense">
-        <h3>今年支出</h3>
-        <p class="metric-value">¥{{ currentYearExpense.toFixed(2) }}</p>
+        <h3>今年收支</h3>
+        <p class="metric-value">{{ currentYearExpense.toFixed(2) }}</p>
       </div>
 
       <div class="metric-card weekly-avg">
-        <h3>周平均净支出</h3>
+        <h3>周平均收支</h3>
         <p
           :class="[
             'metric-value',
             weeklyAvgNetExpense < 0 ? 'negative' : 'positive',
           ]"
         >
-          {{ weeklyAvgNetExpense >= 0 ? "+" : "" }}¥{{
-            Math.abs(weeklyAvgNetExpense).toFixed(2)
-          }}
+          {{ weeklyAvgNetExpense > 0 ? "+" : ""
+          }}{{ Math.abs(weeklyAvgNetExpense).toFixed(2) }}
         </p>
       </div>
 
       <div class="metric-card monthly-avg">
-        <h3>月平均净支出</h3>
+        <h3>月平均收支</h3>
         <p
           :class="[
             'metric-value',
             monthlyAvgNetExpense < 0 ? 'negative' : 'positive',
           ]"
         >
-          {{ monthlyAvgNetExpense >= 0 ? "+" : "" }}¥{{
-            Math.abs(monthlyAvgNetExpense).toFixed(2)
-          }}
+          {{ monthlyAvgNetExpense >= 0 ? "+" : ""
+          }}{{ Math.abs(monthlyAvgNetExpense).toFixed(2) }}
         </p>
       </div>
     </section>
@@ -994,7 +957,7 @@ const goToCurrentMonth = () => {
                 item.type === "income" ? "收入" : "支出"
               }}</span>
             </td>
-            <td>¥{{ item.amount.toFixed(2) }}</td>
+            <td>{{ item.amount.toFixed(2) }}</td>
             <!-- 显示金额 -->
             <td>{{ formatTags(item.tags) }}</td>
           </tr>
