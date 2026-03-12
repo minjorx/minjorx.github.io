@@ -97,6 +97,17 @@ const loadAllTransactions = async () => {
 };
 
 // 计算指标
+const currentYearIncome = computed(() => {
+  const currentYear = new Date().getFullYear();
+  return transactions.value
+    .filter(
+      (tx) =>
+        tx.type === "income" &&
+        new Date(tx.timestamp).getFullYear() === currentYear
+    )
+    .reduce((sum, tx) => sum + tx.amount, 0);
+});
+
 const currentYearExpense = computed(() => {
   const currentYear = new Date().getFullYear();
   return transactions.value
@@ -108,8 +119,8 @@ const currentYearExpense = computed(() => {
     .reduce((sum, tx) => sum + tx.amount, 0);
 });
 
-// 计算周平均净支出（最近 4 周）
-const weeklyAvgNetExpense = computed(() => {
+// 计算周平均收入（最近 4 周）
+const weeklyAvgIncome = computed(() => {
   const fourWeeksAgo = new Date();
   fourWeeksAgo.setDate(fourWeeksAgo.getDate() - 28);
 
@@ -158,14 +169,63 @@ const weeklyAvgNetExpense = computed(() => {
 
   // 计算平均值
   const weeks = Object.values(weeklyData);
-  const avgIncome = weeks.reduce((sum, w) => sum + w.income, 0) / 4;
-  const avgExpense = weeks.reduce((sum, w) => sum + w.expense, 0) / 4;
-
-  return avgIncome - avgExpense;
+  return weeks.reduce((sum, w) => sum + w.income, 0) / 4;
 });
 
-// 计算月平均净支出（最近 12 个月，从第一个有数据的月份开始）
-const monthlyAvgNetExpense = computed(() => {
+const weeklyAvgExpense = computed(() => {
+  const fourWeeksAgo = new Date();
+  fourWeeksAgo.setDate(fourWeeksAgo.getDate() - 28);
+
+  const weeklyData: Record<string, { income: number; expense: number }> = {};
+
+  // 初始化每周数据 - 找到最近的周一作为起始点
+  const today = new Date();
+  const currentDayOfWeek = today.getDay(); // 0=周日，1-6=周一到周六
+  const daysToLastMonday = currentDayOfWeek === 0 ? 6 : currentDayOfWeek - 1; // 距离上个周一的天数
+
+  // 从上个周一开始，往前推 4 周
+  const weekStart = new Date(today);
+  weekStart.setDate(today.getDate() - daysToLastMonday - 21); // 回到 3 周前的周一
+
+  for (let i = 0; i < 4; i++) {
+    const weekDate = new Date(weekStart);
+    weekDate.setDate(weekStart.getDate() + i * 7);
+    const weekKey = `${weekDate.getFullYear()}-${String(
+      weekDate.getMonth() + 1
+    ).padStart(2, "0")}-${String(weekDate.getDate()).padStart(2, "0")}`;
+    weeklyData[weekKey] = { income: 0, expense: 0 };
+  }
+
+  // 填充实际数据
+  transactions.value.forEach((tx) => {
+    const txDate = new Date(tx.timestamp);
+    if (txDate >= fourWeeksAgo) {
+      // 计算该日期所在周的周一
+      const dayOfWeek = txDate.getDay();
+      const daysToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+      const weekStartForTx = new Date(txDate);
+      weekStartForTx.setDate(txDate.getDate() - daysToMonday);
+      const weekKey = `${weekStartForTx.getFullYear()}-${String(
+        weekStartForTx.getMonth() + 1
+      ).padStart(2, "0")}-${String(weekStartForTx.getDate()).padStart(2, "0")}`;
+
+      if (weeklyData[weekKey]) {
+        if (tx.type === "income") {
+          weeklyData[weekKey].income += tx.amount;
+        } else {
+          weeklyData[weekKey].expense += tx.amount;
+        }
+      }
+    }
+  });
+
+  // 计算平均值
+  const weeks = Object.values(weeklyData);
+  return weeks.reduce((sum, w) => sum + w.expense, 0) / 4;
+});
+
+// 计算月平均收入（最近 12 个月，从第一个有数据的月份开始）
+const monthlyAvgIncome = computed(() => {
   if (transactions.value.length === 0) return 0;
 
   // 找到最早的交易记录日期
@@ -217,11 +277,62 @@ const monthlyAvgNetExpense = computed(() => {
 
   // 计算平均值
   const months = Object.values(monthlyData);
-  const avgIncome = months.reduce((sum, m) => sum + m.income, 0) / actualMonths;
-  const avgExpense =
-    months.reduce((sum, m) => sum + m.expense, 0) / actualMonths;
+  return months.reduce((sum, m) => sum + m.income, 0) / actualMonths;
+});
 
-  return avgIncome - avgExpense;
+const monthlyAvgExpense = computed(() => {
+  if (transactions.value.length === 0) return 0;
+
+  // 找到最早的交易记录日期
+  const earliestTxDate = transactions.value.reduce((earliest, tx) => {
+    const txDate = new Date(tx.timestamp);
+    return txDate < earliest ? txDate : earliest;
+  }, new Date());
+
+  // 计算从最早交易月份到现在的月份数（最多 12 个月）
+  const now = new Date();
+  const monthsDiff =
+    (now.getFullYear() - earliestTxDate.getFullYear()) * 12 +
+    (now.getMonth() - earliestTxDate.getMonth());
+
+  const actualMonths = Math.min(monthsDiff + 1, 12); // +1 是因为包含当月
+
+  // 从当前月份往前推 actualMonths 个月
+  const startDate = new Date();
+  startDate.setMonth(startDate.getMonth() - (actualMonths - 1));
+  startDate.setDate(1); // 设置为当月 1 号
+
+  const monthlyData: Record<string, { income: number; expense: number }> = {};
+
+  // 初始化每月数据
+  const currentDate = new Date(startDate);
+  while (currentDate <= now) {
+    const year = currentDate.getFullYear();
+    const month = String(currentDate.getMonth() + 1).padStart(2, "0");
+    const monthKey = `${year}-${month}`;
+    monthlyData[monthKey] = { income: 0, expense: 0 };
+    currentDate.setMonth(currentDate.getMonth() + 1);
+  }
+
+  // 填充实际数据
+  transactions.value.forEach((tx) => {
+    const txDate = new Date(tx.timestamp);
+    const txYear = txDate.getFullYear();
+    const txMonth = String(txDate.getMonth() + 1).padStart(2, "0");
+    const txMonthStr = `${txYear}-${txMonth}`;
+
+    if (monthlyData[txMonthStr]) {
+      if (tx.type === "income") {
+        monthlyData[txMonthStr].income += tx.amount;
+      } else {
+        monthlyData[txMonthStr].expense += tx.amount;
+      }
+    }
+  });
+
+  // 计算平均值
+  const months = Object.values(monthlyData);
+  return months.reduce((sum, m) => sum + m.expense, 0) / actualMonths;
 });
 
 // 计算最近一个月的每日数据
@@ -561,7 +672,7 @@ const renderMonthlyTaggedChart = () => {
         },
       },
       legend: {
-        data: ["+", "-"],
+        data: ["收入", "支出"],
         top: "10%",
       },
       grid: {
@@ -596,7 +707,7 @@ const renderMonthlyTaggedChart = () => {
       ],
       series: [
         {
-          name: "+",
+          name: "收入",
           type: "bar",
           color: "#4caf50",
           emphasis: {
@@ -605,7 +716,7 @@ const renderMonthlyTaggedChart = () => {
           data: taggedMonthlyStats.value.map((item) => item.income),
         },
         {
-          name: "-",
+          name: "支出",
           type: "bar",
           color: "#f06292",
           emphasis: {
@@ -900,35 +1011,24 @@ const goToCurrentMonth = () => {
 
     <!-- 指标卡片 -->
     <section class="metrics-section">
-      <div class="metric-card expense">
+      <div class="metric-card">
         <h3>今年收支</h3>
-        <p class="metric-value">{{ currentYearExpense.toFixed(2) }}</p>
+        <p class="metric-value positive">+{{ currentYearIncome.toFixed(2) }}</p>
+        <p class="metric-value negative">
+          -{{ currentYearExpense.toFixed(2) }}
+        </p>
       </div>
 
-      <div class="metric-card weekly-avg">
+      <div class="metric-card">
         <h3>周平均收支</h3>
-        <p
-          :class="[
-            'metric-value',
-            weeklyAvgNetExpense < 0 ? 'negative' : 'positive',
-          ]"
-        >
-          {{ weeklyAvgNetExpense > 0 ? "+" : ""
-          }}{{ Math.abs(weeklyAvgNetExpense).toFixed(2) }}
-        </p>
+        <p class="metric-value positive">+{{ weeklyAvgIncome.toFixed(2) }}</p>
+        <p class="metric-value negative">-{{ weeklyAvgExpense.toFixed(2) }}</p>
       </div>
 
-      <div class="metric-card monthly-avg">
+      <div class="metric-card">
         <h3>月平均收支</h3>
-        <p
-          :class="[
-            'metric-value',
-            monthlyAvgNetExpense < 0 ? 'negative' : 'positive',
-          ]"
-        >
-          {{ monthlyAvgNetExpense >= 0 ? "+" : ""
-          }}{{ Math.abs(monthlyAvgNetExpense).toFixed(2) }}
-        </p>
+        <p class="metric-value positive">+{{ monthlyAvgIncome.toFixed(2) }}</p>
+        <p class="metric-value negative">-{{ monthlyAvgExpense.toFixed(2) }}</p>
       </div>
     </section>
 
@@ -1067,19 +1167,18 @@ const goToCurrentMonth = () => {
 }
 
 .metrics-section {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   gap: 15px;
   margin-bottom: 30px;
-  flex-wrap: wrap;
 }
 
 .metric-card {
-  flex: 1;
-  min-width: calc(33.33% - 10px);
-  padding: 15px 10px;
+  padding: 15px;
   border-radius: 10px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   text-align: center;
+  background: white;
 }
 
 .metric-card h3 {
@@ -1091,7 +1190,7 @@ const goToCurrentMonth = () => {
 .metric-value {
   font-size: 1.3rem;
   font-weight: bold;
-  margin: 0;
+  margin: 5px 0;
   color: #2e7d32a1;
 }
 
