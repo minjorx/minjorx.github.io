@@ -115,11 +115,21 @@ const weeklyAvgNetExpense = computed(() => {
 
   const weeklyData: Record<string, { income: number; expense: number }> = {};
 
-  // 初始化每周数据
+  // 初始化每周数据 - 找到最近的周一作为起始点
+  const today = new Date();
+  const currentDayOfWeek = today.getDay(); // 0=周日，1-6=周一到周六
+  const daysToLastMonday = currentDayOfWeek === 0 ? 6 : currentDayOfWeek - 1; // 距离上个周一的天数
+
+  // 从上个周一开始，往前推 4 周
+  const weekStart = new Date(today);
+  weekStart.setDate(today.getDate() - daysToLastMonday - 21); // 回到 3 周前的周一
+
   for (let i = 0; i < 4; i++) {
-    const weekStart = new Date(fourWeeksAgo);
-    weekStart.setDate(weekStart.getDate() + i * 7);
-    const weekKey = weekStart.toISOString().split("T")[0];
+    const weekDate = new Date(weekStart);
+    weekDate.setDate(weekStart.getDate() + i * 7);
+    const weekKey = `${weekDate.getFullYear()}-${String(
+      weekDate.getMonth() + 1
+    ).padStart(2, "0")}-${String(weekDate.getDate()).padStart(2, "0")}`;
     weeklyData[weekKey] = { income: 0, expense: 0 };
   }
 
@@ -127,9 +137,14 @@ const weeklyAvgNetExpense = computed(() => {
   transactions.value.forEach((tx) => {
     const txDate = new Date(tx.timestamp);
     if (txDate >= fourWeeksAgo) {
-      const weekStart = new Date(txDate);
-      weekStart.setDate(weekStart.getDate() - weekStart.getDay());
-      const weekKey = weekStart.toISOString().split("T")[0];
+      // 计算该日期所在周的周一
+      const dayOfWeek = txDate.getDay();
+      const daysToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+      const weekStartForTx = new Date(txDate);
+      weekStartForTx.setDate(txDate.getDate() - daysToMonday);
+      const weekKey = `${weekStartForTx.getFullYear()}-${String(
+        weekStartForTx.getMonth() + 1
+      ).padStart(2, "0")}-${String(weekStartForTx.getDate()).padStart(2, "0")}`;
 
       if (weeklyData[weekKey]) {
         if (tx.type === "income") {
@@ -149,16 +164,34 @@ const weeklyAvgNetExpense = computed(() => {
   return avgIncome - avgExpense;
 });
 
-// 计算月平均净支出（最近 12 个月）
+// 计算月平均净支出（最近 12 个月，从第一个有数据的月份开始）
 const monthlyAvgNetExpense = computed(() => {
-  const twelveMonthsAgo = new Date();
-  twelveMonthsAgo.setMonth(twelveMonthsAgo.getMonth() - 11);
+  if (transactions.value.length === 0) return 0;
+
+  // 找到最早的交易记录日期
+  const earliestTxDate = transactions.value.reduce((earliest, tx) => {
+    const txDate = new Date(tx.timestamp);
+    return txDate < earliest ? txDate : earliest;
+  }, new Date());
+
+  // 计算从最早交易月份到现在的月份数（最多 12 个月）
+  const now = new Date();
+  const monthsDiff =
+    (now.getFullYear() - earliestTxDate.getFullYear()) * 12 +
+    (now.getMonth() - earliestTxDate.getMonth());
+
+  const actualMonths = Math.min(monthsDiff + 1, 12); // +1 是因为包含当月
+
+  // 从当前月份往前推 actualMonths 个月
+  const startDate = new Date();
+  startDate.setMonth(startDate.getMonth() - (actualMonths - 1));
+  startDate.setDate(1); // 设置为当月 1 号
 
   const monthlyData: Record<string, { income: number; expense: number }> = {};
 
   // 初始化每月数据
-  const currentDate = new Date(twelveMonthsAgo);
-  while (currentDate <= new Date()) {
+  const currentDate = new Date(startDate);
+  while (currentDate <= now) {
     const year = currentDate.getFullYear();
     const month = String(currentDate.getMonth() + 1).padStart(2, "0");
     const monthKey = `${year}-${month}`;
@@ -184,8 +217,9 @@ const monthlyAvgNetExpense = computed(() => {
 
   // 计算平均值
   const months = Object.values(monthlyData);
-  const avgIncome = months.reduce((sum, m) => sum + m.income, 0) / 12;
-  const avgExpense = months.reduce((sum, m) => sum + m.expense, 0) / 12;
+  const avgIncome = months.reduce((sum, m) => sum + m.income, 0) / actualMonths;
+  const avgExpense =
+    months.reduce((sum, m) => sum + m.expense, 0) / actualMonths;
 
   return avgIncome - avgExpense;
 });
