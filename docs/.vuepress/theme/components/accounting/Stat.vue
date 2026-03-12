@@ -169,6 +169,7 @@ const weeklyAvgIncome = computed(() => {
 
   // 计算平均值
   const weeks = Object.values(weeklyData);
+  console.log(weeks);
   return weeks.reduce((sum, w) => sum + w.income, 0) / 4;
 });
 
@@ -507,7 +508,7 @@ const calendarHeatmapData = computed(() => {
   const heatmapData: any[] = [];
   const dailyNet: Record<string, number> = {};
 
-  // 计算每日净支出（支出 - 收入）
+  // 计算每日净支出（收入 - 支出）
   transactions.value.forEach((tx) => {
     const txDate = new Date(tx.timestamp);
     if (txDate >= startDate && txDate <= endDate) {
@@ -518,10 +519,10 @@ const calendarHeatmapData = computed(() => {
       if (!dailyNet[dateKey]) {
         dailyNet[dateKey] = 0;
       }
-      if (tx.type === "expense") {
-        dailyNet[dateKey] += tx.amount; // 支出增加（正数，表示净支出增加）
+      if (tx.type === "income") {
+        dailyNet[dateKey] += tx.amount; // 收入增加（正数）
       } else {
-        dailyNet[dateKey] -= tx.amount; // 收入增加（负数，表示净支出减少）
+        dailyNet[dateKey] -= tx.amount; // 支出增加（负数）
       }
     }
   });
