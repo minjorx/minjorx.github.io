@@ -1,28 +1,34 @@
 <script setup lang="ts">
 import { ref, onMounted, computed, nextTick, onUnmounted } from "vue";
 import * as echarts from "echarts/core";
-import { BarChart } from "echarts/charts";
+import { BarChart, HeatmapChart } from "echarts/charts";
 import {
   GridComponent,
   TooltipComponent,
   LegendComponent,
   TitleComponent,
+  VisualMapComponent,
+  CalendarComponent,
 } from "echarts/components";
 import { CanvasRenderer } from "echarts/renderers";
 
-// 注册ECharts所需组件
+// 注册 ECharts 所需组件
 echarts.use([
   BarChart,
+  HeatmapChart,
   GridComponent,
   TooltipComponent,
   LegendComponent,
   TitleComponent,
+  VisualMapComponent,
+  CalendarComponent,
   CanvasRenderer,
 ]);
 
 // 数据状态
 const transactions = ref<any[]>([]);
 const loading = ref(true);
+const selectedTags = ref<string[]>([]); // 改为数组支持多选
 
 // 分页状态
 const currentPage = ref(1);
@@ -100,6 +106,88 @@ const currentYearExpense = computed(() => {
         new Date(tx.timestamp).getFullYear() === currentYear
     )
     .reduce((sum, tx) => sum + tx.amount, 0);
+});
+
+// 计算周平均净支出（最近 4 周）
+const weeklyAvgNetExpense = computed(() => {
+  const fourWeeksAgo = new Date();
+  fourWeeksAgo.setDate(fourWeeksAgo.getDate() - 28);
+
+  const weeklyData: Record<string, { income: number; expense: number }> = {};
+
+  // 初始化每周数据
+  for (let i = 0; i < 4; i++) {
+    const weekStart = new Date(fourWeeksAgo);
+    weekStart.setDate(weekStart.getDate() + i * 7);
+    const weekKey = weekStart.toISOString().split("T")[0];
+    weeklyData[weekKey] = { income: 0, expense: 0 };
+  }
+
+  // 填充实际数据
+  transactions.value.forEach((tx) => {
+    const txDate = new Date(tx.timestamp);
+    if (txDate >= fourWeeksAgo) {
+      const weekStart = new Date(txDate);
+      weekStart.setDate(weekStart.getDate() - weekStart.getDay());
+      const weekKey = weekStart.toISOString().split("T")[0];
+
+      if (weeklyData[weekKey]) {
+        if (tx.type === "income") {
+          weeklyData[weekKey].income += tx.amount;
+        } else {
+          weeklyData[weekKey].expense += tx.amount;
+        }
+      }
+    }
+  });
+
+  // 计算平均值
+  const weeks = Object.values(weeklyData);
+  const avgIncome = weeks.reduce((sum, w) => sum + w.income, 0) / 4;
+  const avgExpense = weeks.reduce((sum, w) => sum + w.expense, 0) / 4;
+
+  return avgIncome - avgExpense;
+});
+
+// 计算月平均净支出（最近 12 个月）
+const monthlyAvgNetExpense = computed(() => {
+  const twelveMonthsAgo = new Date();
+  twelveMonthsAgo.setMonth(twelveMonthsAgo.getMonth() - 11);
+
+  const monthlyData: Record<string, { income: number; expense: number }> = {};
+
+  // 初始化每月数据
+  const currentDate = new Date(twelveMonthsAgo);
+  while (currentDate <= new Date()) {
+    const year = currentDate.getFullYear();
+    const month = String(currentDate.getMonth() + 1).padStart(2, "0");
+    const monthKey = `${year}-${month}`;
+    monthlyData[monthKey] = { income: 0, expense: 0 };
+    currentDate.setMonth(currentDate.getMonth() + 1);
+  }
+
+  // 填充实际数据
+  transactions.value.forEach((tx) => {
+    const txDate = new Date(tx.timestamp);
+    const txYear = txDate.getFullYear();
+    const txMonth = String(txDate.getMonth() + 1).padStart(2, "0");
+    const txMonthStr = `${txYear}-${txMonth}`;
+
+    if (monthlyData[txMonthStr]) {
+      if (tx.type === "income") {
+        monthlyData[txMonthStr].income += tx.amount;
+      } else {
+        monthlyData[txMonthStr].expense += tx.amount;
+      }
+    }
+  });
+
+  // 计算平均值
+  const months = Object.values(monthlyData);
+  const avgIncome = months.reduce((sum, m) => sum + m.income, 0) / 12;
+  const avgExpense = months.reduce((sum, m) => sum + m.expense, 0) / 12;
+
+  return avgIncome - avgExpense;
 });
 
 // 计算最近一个月的每日数据
@@ -194,25 +282,219 @@ const monthlyStats = computed(() => {
     .sort((a, b) => new Date(a.month).getTime() - new Date(b.month).getTime());
 });
 
-// 图表实例
-let dailyChartInstance: echarts.ECharts | null = null;
-let monthlyChartInstance: echarts.ECharts | null = null;
+// 获取所有唯一标签
+const allTags = computed(() => {
+  const tagSet = new Set<string>();
+  transactions.value.forEach((tx) => {
+    if (tx.tags && Array.isArray(tx.tags)) {
+      tx.tags.forEach((tag: string) => tagSet.add(tag));
+    }
+  });
+  return ["全部", ...Array.from(tagSet).sort()];
+});
 
-// 渲染每日图表
-const renderDailyChart = () => {
-  if (!dailyChartInstance) {
-    const chartDom = document.getElementById("daily-chart");
+// 按标签筛选的月度数据（支持多选）
+const taggedMonthlyStats = computed(() => {
+  const twelveMonthsAgo = new Date();
+  twelveMonthsAgo.setMonth(twelveMonthsAgo.getMonth() - 11);
+
+  const monthsInRange: string[] = [];
+  const currentDate = new Date(twelveMonthsAgo);
+  while (currentDate <= new Date()) {
+    const year = currentDate.getFullYear();
+    const month = String(currentDate.getMonth() + 1).padStart(2, "0");
+    monthsInRange.push(`${year}-${month}`);
+    currentDate.setMonth(currentDate.getMonth() + 1);
+  }
+
+  const monthlyData: any = {};
+  monthsInRange.forEach((month) => {
+    monthlyData[month] = { income: 0, expense: 0 };
+  });
+
+  transactions.value.forEach((tx) => {
+    const txDate = new Date(tx.timestamp);
+    const txYear = txDate.getFullYear();
+    const txMonth = String(txDate.getMonth() + 1).padStart(2, "0");
+    const txMonthStr = `${txYear}-${txMonth}`;
+
+    // 标签筛选逻辑（支持多选）
+    if (selectedTags.value.length > 0 && !selectedTags.value.includes("全部")) {
+      if (
+        !tx.tags ||
+        !tx.tags.some((tag: string) => selectedTags.value.includes(tag))
+      ) {
+        return;
+      }
+    }
+
+    if (new Date(txMonthStr) >= twelveMonthsAgo) {
+      if (tx.type === "income") {
+        monthlyData[txMonthStr].income += tx.amount;
+      } else if (tx.type === "expense") {
+        monthlyData[txMonthStr].expense += tx.amount;
+      }
+    }
+  });
+
+  return Object.entries(monthlyData)
+    .map(([month, data]: [string, any]) => ({
+      month,
+      income: data.income,
+      expense: data.expense,
+      net: data.income - data.expense,
+    }))
+    .sort((a, b) => new Date(a.month).getTime() - new Date(b.month).getTime());
+});
+
+// 日历热力图数据（支持指定月份）
+const currentCalendarMonth = ref(new Date()); // 当前展示的月份
+
+const calendarHeatmapData = computed(() => {
+  const year = currentCalendarMonth.value.getFullYear();
+  const month = currentCalendarMonth.value.getMonth();
+
+  // 获取当月第一天
+  const startDate = new Date(year, month, 1);
+  // 获取当月最后一天
+  const endDate = new Date(year, month + 1, 0);
+
+  const heatmapData: any[] = [];
+  const dailyNet: Record<string, number> = {};
+
+  // 计算每日净支出（支出 - 收入）
+  transactions.value.forEach((tx) => {
+    const txDate = new Date(tx.timestamp);
+    if (txDate >= startDate && txDate <= endDate) {
+      // 修复时区问题：使用本地日期格式而不是 ISO 字符串
+      const dateKey = `${txDate.getFullYear()}-${String(
+        txDate.getMonth() + 1
+      ).padStart(2, "0")}-${String(txDate.getDate()).padStart(2, "0")}`;
+      if (!dailyNet[dateKey]) {
+        dailyNet[dateKey] = 0;
+      }
+      if (tx.type === "expense") {
+        dailyNet[dateKey] += tx.amount; // 支出增加（正数，表示净支出增加）
+      } else {
+        dailyNet[dateKey] -= tx.amount; // 收入增加（负数，表示净支出减少）
+      }
+    }
+  });
+
+  // 转换为热力图格式
+  Object.entries(dailyNet).forEach(([date, net]) => {
+    heatmapData.push([date, net]);
+  });
+
+  return heatmapData.sort((a, b) => a[0].localeCompare(b[0]));
+});
+
+// 获取日历展示数据（按周分组）
+const calendarWeekData = computed(() => {
+  const year = currentCalendarMonth.value.getFullYear();
+  const month = currentCalendarMonth.value.getMonth();
+
+  // 获取当月第一天和最后一天
+  const firstDay = new Date(year, month, 1);
+  const lastDay = new Date(year, month + 1, 0);
+
+  // 找到第一个周一（如果 1 号不是周一，则从上一个月的日期开始）
+  const startDay = new Date(firstDay);
+  // 修正：getDay() 返回 0 表示周日，需要转换为上周一
+  const dayOfWeek = firstDay.getDay();
+  const daysToPrevMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+  startDay.setDate(firstDay.getDate() - daysToPrevMonday);
+
+  const weeks: any[] = [];
+  let currentWeek: any[] = [];
+
+  // 遍历所有日期
+  const currentDate = new Date(startDay);
+  while (currentDate <= lastDay || currentWeek.length > 0) {
+    // 修复时区问题：使用本地日期格式而不是 ISO 字符串
+    const dateStr = `${currentDate.getFullYear()}-${String(
+      currentDate.getMonth() + 1
+    ).padStart(2, "0")}-${String(currentDate.getDate()).padStart(2, "0")}`;
+    const dayOfMonth = currentDate.getDate();
+    const dayOfWeek = currentDate.getDay();
+
+    // 查找当天的数据（使用本地日期字符串匹配）
+    const dayData = calendarHeatmapData.value.find((d) => d[0] === dateStr);
+    const netValue = dayData ? dayData[1] : 0;
+
+    // 将 JavaScript 的星期 (0=周日，1-6=周一到周六) 转换为热力图的列索引 (0=周一，6=周日)
+    const dayIndex = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+
+    currentWeek.push({
+      date: dateStr,
+      day: dayOfMonth,
+      value: netValue,
+      isCurrentMonth: currentDate.getMonth() === month,
+      dayIndex: dayIndex, // 添加 dayIndex 用于热力图定位
+    });
+
+    // 周日为一周的结束
+    if (dayOfWeek === 0) {
+      weeks.push(currentWeek);
+      currentWeek = [];
+    }
+
+    // 如果已经过了当月最后一天且当前周为空，则退出
+    if (currentDate > lastDay && currentWeek.length === 0) {
+      break;
+    }
+
+    currentDate.setDate(currentDate.getDate() + 1);
+  }
+
+  // 处理最后一周（如果还有剩余天数）
+  if (currentWeek.length > 0) {
+    // 补齐最后一周到 7 天
+    const lastWeek = currentWeek;
+    const remainingDays = 7 - lastWeek.length;
+    for (let i = 1; i <= remainingDays; i++) {
+      const nextDate = new Date(lastWeek[lastWeek.length - 1].date);
+      nextDate.setDate(nextDate.getDate() + i);
+      const dateStr = `${nextDate.getFullYear()}-${String(
+        nextDate.getMonth() + 1
+      ).padStart(2, "0")}-${String(nextDate.getDate()).padStart(2, "0")}`;
+      lastWeek.push({
+        date: dateStr,
+        day: nextDate.getDate(),
+        value: 0,
+        isCurrentMonth: nextDate.getMonth() === month,
+        dayIndex: (lastWeek.length + i - 1) % 7,
+      });
+    }
+    weeks.push(lastWeek);
+  }
+
+  return weeks;
+});
+
+// 图表实例
+let monthlyTaggedChartInstance: echarts.ECharts | null = null;
+let calendarChartInstance: echarts.ECharts | null = null;
+
+// 渲染按标签筛选的月度图表
+const renderMonthlyTaggedChart = () => {
+  if (!monthlyTaggedChartInstance) {
+    const chartDom = document.getElementById("monthly-tagged-chart");
     if (chartDom) {
-      dailyChartInstance = echarts.init(chartDom, undefined, {
+      monthlyTaggedChartInstance = echarts.init(chartDom, undefined, {
         renderer: "canvas",
       });
     }
   }
 
-  if (dailyChartInstance) {
+  if (monthlyTaggedChartInstance) {
     const option = {
       title: {
-        text: "最近30天收支趋势",
+        text: `月度收支${
+          selectedTags.value.length > 0 && !selectedTags.value.includes("全部")
+            ? `(${selectedTags.value.join(", ")})`
+            : ""
+        }`,
         left: "center",
       },
       tooltip: {
@@ -223,20 +505,30 @@ const renderDailyChart = () => {
         formatter: function (params: any[]) {
           let result = params[0].name + "<br/>";
           params.forEach((param) => {
+            const value = param.value as number;
             result +=
               param.marker +
-              param.seriesName +
-              ": ¥" +
-              param.value.toLocaleString(undefined, {
+              (param.seriesName === "收入" ? "+" : "-") +
+              "¥" +
+              value.toLocaleString(undefined, {
                 maximumFractionDigits: 2,
               }) +
               "<br/>";
           });
+          // 添加净值
+          const monthData = taggedMonthlyStats.value.find(
+            (m) => m.month === params[0].name
+          );
+          if (monthData) {
+            result += `<br/>¥${monthData.net.toLocaleString(undefined, {
+              maximumFractionDigits: 2,
+            })}`;
+          }
           return result;
         },
       },
       legend: {
-        data: ["收入", "支出"],
+        data: ["+", "-"],
         top: "10%",
       },
       grid: {
@@ -244,12 +536,12 @@ const renderDailyChart = () => {
         right: "4%",
         bottom: "3%",
         top: "20%",
-        containLabel: true,
+        outerBounds: 0,
       },
       xAxis: [
         {
           type: "category",
-          data: dailyStats.value.map((item) => item.date),
+          data: taggedMonthlyStats.value.map((item) => item.month),
           axisTick: {
             alignWithLabel: true,
           },
@@ -271,133 +563,216 @@ const renderDailyChart = () => {
       ],
       series: [
         {
-          name: "收入",
+          name: "+",
           type: "bar",
           color: "#4caf50",
           emphasis: {
             focus: "series",
           },
-          data: dailyStats.value.map((item) => item.income),
+          data: taggedMonthlyStats.value.map((item) => item.income),
         },
         {
-          name: "支出",
+          name: "-",
           type: "bar",
           color: "#f06292",
           emphasis: {
             focus: "series",
           },
-          data: dailyStats.value.map((item) => item.expense),
+          data: taggedMonthlyStats.value.map((item) => item.expense),
         },
       ],
     };
 
-    dailyChartInstance.setOption(option);
+    monthlyTaggedChartInstance.setOption(option);
   }
 };
 
-// 渲染每月图表
-const renderMonthlyChart = () => {
-  if (!monthlyChartInstance) {
-    const chartDom = document.getElementById("monthly-chart");
+// 渲染日历热力图（使用自定义布局）
+const renderCalendarChart = () => {
+  if (!calendarChartInstance) {
+    const chartDom = document.getElementById("calendar-chart");
     if (chartDom) {
-      monthlyChartInstance = echarts.init(chartDom, undefined, {
+      calendarChartInstance = echarts.init(chartDom, undefined, {
         renderer: "canvas",
       });
     }
   }
 
-  if (monthlyChartInstance) {
+  if (calendarChartInstance) {
+    const year = currentCalendarMonth.value.getFullYear();
+    const month = currentCalendarMonth.value.getMonth() + 1;
+    const weeks = calendarWeekData.value;
+
+    // 计算所有数据的最大值和最小值用于颜色映射
+    let minVal = 0;
+    let maxVal = 0;
+    const allValues = calendarHeatmapData.value.map((d) => d[1]);
+    if (allValues.length > 0) {
+      minVal = Math.min(...allValues, 0);
+      maxVal = Math.max(...allValues, 0);
+    }
+
     const option = {
       title: {
-        text: "最近12个月收支汇总",
+        text: `${year}年${String(month).padStart(2, "0")}月每日净值`,
         left: "center",
       },
       tooltip: {
-        trigger: "axis",
-        axisPointer: {
-          type: "shadow",
-        },
-        formatter: function (params: any[]) {
-          let result = params[0].name + "<br/>";
-          params.forEach((param) => {
-            result +=
-              param.marker +
-              param.seriesName +
-              ": ¥" +
-              param.value.toLocaleString(undefined, {
-                maximumFractionDigits: 2,
-              }) +
-              "<br/>";
+        formatter: function (params: any) {
+          if (!params.data || !params.data.date) {
+            return "";
+          }
+          const date = params.data.date;
+          const value = params.data.value[2]; // 获取数组中的第三个元素（净支出值）
+          const count = Math.abs(value).toLocaleString(undefined, {
+            maximumFractionDigits: 2,
           });
-          return result;
+          if (value === 0) {
+            return `${date}<br/>`;
+          }
+          return `${date}<br/>` + `${value >= 0 ? "+" : "-"}${count}`;
         },
       },
-      legend: {
-        data: ["收入", "支出"],
-        top: "10%",
+      visualMap: {
+        type: "piecewise",
+        calculable: true,
+        orient: "horizontal",
+        left: "center",
+        bottom: "bottom",
+        textStyle: {
+          color: "#000",
+        },
+        pieces: [
+          {
+            label: "¥0",
+            eq: 0,
+            color: "#FFFFFF",
+          },
+          {
+            label: "+¥",
+            gt: 0,
+            color: "#4CAF50",
+          },
+          {
+            label: "-¥",
+            lt: 0,
+            color: "#F44336",
+          },
+        ],
       },
       grid: {
-        left: "3%",
-        right: "4%",
-        bottom: "3%",
-        top: "20%",
-        containLabel: true,
+        left: "5%",
+        right: "5%",
+        top: "15%",
+        bottom: "15%",
       },
       xAxis: [
         {
           type: "category",
-          data: monthlyStats.value.map((item) => item.month),
-          axisTick: {
-            alignWithLabel: true,
-          },
+          data: ["一", "二", "三", "四", "五", "六", "日"],
+          position: "top",
           axisLabel: {
-            fontSize: 10,
+            fontSize: 12,
+            fontWeight: "bold",
+          },
+          axisTick: {
+            show: false,
+          },
+          axisLine: {
+            show: false,
           },
         },
       ],
       yAxis: [
         {
-          type: "value",
-          name: "金额 (¥)",
-          position: "left",
+          type: "category",
+          data: [],
           axisLabel: {
-            formatter: "¥{value}",
+            show: false,
+          },
+          axisTick: {
+            show: false,
+          },
+          axisLine: {
+            show: false,
           },
         },
       ],
       series: [
         {
-          name: "收入",
-          type: "bar",
-          color: "#4caf50",
-          emphasis: {
-            focus: "series",
+          name: "每日净支出",
+          type: "heatmap",
+          data: (() => {
+            const heatmapData: any[] = [];
+            weeks.forEach((week, weekIndex) => {
+              console.log(week);
+              week.forEach((day: any) => {
+                console.log(day.date);
+                heatmapData.push({
+                  value: [
+                    day.dayIndex,
+                    weeks.length - 1 - weekIndex,
+                    day.value,
+                  ], // 反转周次索引，使第一周显示在顶部
+                  date: day.date,
+                  day: day.day,
+                  isCurrentMonth: day.isCurrentMonth,
+                });
+              });
+            });
+            return heatmapData;
+          })(),
+          label: {
+            show: true,
+            formatter: function (params: any) {
+              const day = params.data.day;
+              const value = params.data.value[2];
+              if (value === 0) {
+                return `{day|${day}}`;
+              }
+              return `{day|${day}}\n{value|${value >= 0 ? "+" : "-"}¥${Math.abs(
+                value
+              ).toFixed(2)}}`;
+            },
+            rich: {
+              day: {
+                fontSize: 11,
+                fontWeight: "bold",
+                align: "center",
+                lineHeight: 14,
+              },
+              value: {
+                fontSize: 10,
+                align: "center",
+                lineHeight: 12,
+              },
+            },
           },
-          data: monthlyStats.value.map((item) => item.income),
-        },
-        {
-          name: "支出",
-          type: "bar",
-          color: "#f06292",
-          emphasis: {
-            focus: "series",
+          itemStyle: {
+            borderColor: "#ccc",
+            borderWidth: 1,
           },
-          data: monthlyStats.value.map((item) => item.expense),
+          emphasis: {
+            itemStyle: {
+              shadowBlur: 10,
+              shadowColor: "rgba(0, 0, 0, 0.5)",
+            },
+          },
         },
       ],
     };
 
-    monthlyChartInstance.setOption(option);
+    calendarChartInstance.setOption(option);
   }
 };
 
 // 重新调整图表大小
 const resizeCharts = () => {
-  if (dailyChartInstance) {
-    dailyChartInstance.resize();
+  if (monthlyTaggedChartInstance) {
+    monthlyTaggedChartInstance.resize();
   }
-  if (monthlyChartInstance) {
-    monthlyChartInstance.resize();
+  if (calendarChartInstance) {
+    calendarChartInstance.resize();
   }
 };
 
@@ -405,11 +780,13 @@ onMounted(async () => {
   await loadAllTransactions();
   loading.value = false;
 
-  // 等待DOM更新后再渲染图表
+  // 等待 DOM 更新后再渲染图表
   await nextTick();
 
-  renderDailyChart();
-  renderMonthlyChart();
+  // 初始化当前月份状态并渲染图表
+  currentCalendarMonth.value = new Date();
+  renderMonthlyTaggedChart();
+  renderCalendarChart();
 
   // 监听窗口大小变化
   window.addEventListener("resize", resizeCharts);
@@ -417,11 +794,11 @@ onMounted(async () => {
 
 // 组件卸载时清理事件监听器
 onUnmounted(() => {
-  if (dailyChartInstance) {
-    dailyChartInstance.dispose();
+  if (monthlyTaggedChartInstance) {
+    monthlyTaggedChartInstance.dispose();
   }
-  if (monthlyChartInstance) {
-    monthlyChartInstance.dispose();
+  if (calendarChartInstance) {
+    calendarChartInstance.dispose();
   }
   window.removeEventListener("resize", resizeCharts);
 });
@@ -459,6 +836,60 @@ function formatDate(timestamp: number) {
 
   return `${year}-${month}-${day} ${hours}:${minutes}`;
 }
+
+// 切换标签筛选（支持多选）
+const toggleTagFilter = (tag: string) => {
+  const index = selectedTags.value.indexOf(tag);
+
+  if (index > -1) {
+    // 已选中则取消选中
+    selectedTags.value.splice(index, 1);
+  } else {
+    // 未选中则添加
+    if (tag === "全部") {
+      // 点击"全部"时，清空其他选择
+      selectedTags.value = ["全部"];
+    } else {
+      // 点击其他标签时，移除"全部"
+      if (selectedTags.value.includes("全部")) {
+        selectedTags.value = selectedTags.value.filter((t) => t !== "全部");
+      }
+      selectedTags.value.push(tag);
+    }
+  }
+
+  setTimeout(() => {
+    renderMonthlyTaggedChart();
+  }, 0);
+};
+
+// 切换到上一个月
+const prevMonth = () => {
+  const newDate = new Date(currentCalendarMonth.value);
+  newDate.setMonth(newDate.getMonth() - 1);
+  currentCalendarMonth.value = newDate;
+  setTimeout(() => {
+    renderCalendarChart();
+  }, 0);
+};
+
+// 切换到下一个月
+const nextMonth = () => {
+  const newDate = new Date(currentCalendarMonth.value);
+  newDate.setMonth(newDate.getMonth() + 1);
+  currentCalendarMonth.value = newDate;
+  setTimeout(() => {
+    renderCalendarChart();
+  }, 0);
+};
+
+// 切换到当前月
+const goToCurrentMonth = () => {
+  currentCalendarMonth.value = new Date();
+  setTimeout(() => {
+    renderCalendarChart();
+  }, 0);
+};
 </script>
 
 <template>
@@ -474,16 +905,72 @@ function formatDate(timestamp: number) {
         <h3>今年支出</h3>
         <p class="metric-value">¥{{ currentYearExpense.toFixed(2) }}</p>
       </div>
+
+      <div class="metric-card weekly-avg">
+        <h3>周平均净支出</h3>
+        <p
+          :class="[
+            'metric-value',
+            weeklyAvgNetExpense < 0 ? 'negative' : 'positive',
+          ]"
+        >
+          {{ weeklyAvgNetExpense >= 0 ? "+" : "" }}¥{{
+            Math.abs(weeklyAvgNetExpense).toFixed(2)
+          }}
+        </p>
+      </div>
+
+      <div class="metric-card monthly-avg">
+        <h3>月平均净支出</h3>
+        <p
+          :class="[
+            'metric-value',
+            monthlyAvgNetExpense < 0 ? 'negative' : 'positive',
+          ]"
+        >
+          {{ monthlyAvgNetExpense >= 0 ? "+" : "" }}¥{{
+            Math.abs(monthlyAvgNetExpense).toFixed(2)
+          }}
+        </p>
+      </div>
     </section>
 
-    <!-- 最近一月统计 -->
-    <section class="daily-stats-section">
-      <div id="daily-chart" style="height: 400px; width: 100%"></div>
+    <!-- 日历热力图（移到标签筛选之前） -->
+    <section class="calendar-stats-section">
+      <div class="calendar-header">
+        <button class="month-nav-btn" @click="prevMonth">‹ 上月</button>
+        <span class="current-month-display">
+          {{ currentCalendarMonth.getFullYear() }}年{{
+            String(currentCalendarMonth.getMonth() + 1).padStart(2, "0")
+          }}月
+        </span>
+        <button class="month-nav-btn" @click="nextMonth">下月 ›</button>
+        <button class="today-btn" @click="goToCurrentMonth">今天</button>
+      </div>
+      <div id="calendar-chart" style="height: 400px; width: 100%"></div>
     </section>
 
-    <!-- 最近一年统计 -->
-    <section class="monthly-stats-section">
-      <div id="monthly-chart" style="height: 400px; width: 100%"></div>
+    <!-- 标签筛选器 -->
+    <section class="filter-section">
+      <div class="filter-label">按标签筛选：</div>
+      <div class="tag-filters">
+        <button
+          v-for="tag in allTags"
+          :key="tag"
+          :class="[
+            'tag-filter-btn',
+            selectedTags.includes(tag) ? 'active' : '',
+          ]"
+          @click="toggleTagFilter(tag)"
+        >
+          {{ tag }}
+        </button>
+      </div>
+    </section>
+
+    <!-- 按标签筛选的月度统计 -->
+    <section class="monthly-tagged-stats-section">
+      <div id="monthly-tagged-chart" style="height: 400px; width: 100%"></div>
     </section>
 
     <!-- 分页表格 -->
@@ -584,15 +1071,15 @@ function formatDate(timestamp: number) {
 
 .metrics-section {
   display: flex;
-  gap: 20px;
+  gap: 15px;
   margin-bottom: 30px;
   flex-wrap: wrap;
 }
 
 .metric-card {
   flex: 1;
-  min-width: 200px;
-  padding: 20px;
+  min-width: calc(33.33% - 10px);
+  padding: 15px 10px;
   border-radius: 10px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   text-align: center;
@@ -600,25 +1087,122 @@ function formatDate(timestamp: number) {
 
 .metric-card h3 {
   margin: 0 0 10px 0;
-  font-size: 1rem;
+  font-size: 0.9rem;
+  color: #666;
 }
 
 .metric-value {
-  font-size: 1.5rem;
+  font-size: 1.3rem;
   font-weight: bold;
   margin: 0;
+  color: #2e7d32a1;
+}
+
+.metric-value.positive {
+  color: #2e7d32a1;
 }
 
 .metric-value.negative {
-  color: #ad1456bb;
+  color: #c6282880;
 }
 
-.daily-stats-section,
-.monthly-stats-section {
-  margin-bottom: 40px;
-  padding: 0px;
+.filter-section {
+  margin-bottom: 30px;
+  padding: 15px;
   border-radius: 8px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.filter-label {
+  font-size: 0.95rem;
+  font-weight: bold;
+  margin-bottom: 10px;
+  color: #555;
+}
+
+.tag-filters {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.tag-filter-btn {
+  padding: 6px 12px;
+  border: 1px solid #dddddd7e;
+  background-color: rgba(255, 255, 255, 0.466);
+  cursor: pointer;
+  border-radius: 20px;
+  font-size: 0.85rem;
+  transition: all 0.2s;
+  color: #666;
+}
+
+.tag-filter-btn:hover {
+  background-color: #f5f5f57e;
+  border-color: #4caf50;
+}
+
+.tag-filter-btn.active {
+  background-color: #4caf50;
+  color: white;
+  border-color: #4caf50;
+  box-shadow: 0 2px 6px rgba(76, 175, 80, 0.3);
+}
+
+.calendar-stats-section,
+.monthly-tagged-stats-section {
+  margin-bottom: 40px;
+  padding: 15px;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.calendar-header {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 15px;
+  margin-bottom: 15px;
+}
+
+.month-nav-btn {
+  padding: 6px 12px;
+  background-color: rgba(76, 175, 80, 0.1);
+  border: 1px solid #4caf50;
+  color: #4caf50;
+  cursor: pointer;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  transition: all 0.2s;
+}
+
+.month-nav-btn:hover {
+  background-color: #4caf50;
+  color: white;
+}
+
+.today-btn {
+  padding: 6px 12px;
+  background-color: rgba(76, 175, 80, 0.1);
+  border: 1px solid #4caf50;
+  color: #4caf50;
+  cursor: pointer;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  transition: all 0.2s;
+}
+
+.today-btn:hover {
+  background-color: #4caf50;
+  color: white;
+}
+
+.current-month-display {
+  font-size: 1.1rem;
+  font-weight: bold;
+  color: #333;
+  min-width: 150px;
+  text-align: center;
 }
 
 .table-section {
@@ -712,17 +1296,68 @@ function formatDate(timestamp: number) {
 
   .page-header {
     padding: 0 10px;
-    flex-direction: column;
+    flex-direction: row;
     gap: 15px;
   }
 
   .metrics-section {
     flex-direction: column;
-    gap: 15px;
+    gap: 12px;
   }
 
   .metric-card {
     min-width: 100%;
+    padding: 12px 10px;
+  }
+
+  .metric-card h3 {
+    font-size: 0.85rem;
+  }
+
+  .metric-value {
+    font-size: 1.2rem;
+  }
+
+  .filter-section {
+    padding: 12px;
+  }
+
+  .filter-label {
+    font-size: 0.9rem;
+  }
+
+  .tag-filters {
+    gap: 6px;
+  }
+
+  .tag-filter-btn {
+    padding: 5px 10px;
+    font-size: 0.8rem;
+  }
+
+  .calendar-stats-section,
+  .monthly-tagged-stats-section {
+    padding: 10px;
+  }
+
+  .calendar-header {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .month-nav-btn {
+    padding: 5px 10px;
+    font-size: 0.85rem;
+  }
+
+  .today-btn {
+    padding: 5px 10px;
+    font-size: 0.8rem;
+  }
+
+  .current-month-display {
+    font-size: 1rem;
+    min-width: 120px;
   }
 
   .transaction-table {
