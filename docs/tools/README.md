@@ -11,7 +11,8 @@ config:
 
 ## 可用工具
 
-- **<a href="/tools/accounting">记账本</a>** -本地的，方便的记账本 
+- **<a href="/tools/accounting">记账本</a>** -本地的，方便的记账本
+- **<a href="/tools/ip-lookup">IP 查询</a>** - 纯前端 IPv4 地址信息查询工具
 
 ## 使用方法
 
