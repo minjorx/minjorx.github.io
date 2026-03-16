@@ -131,7 +131,7 @@ const aesGcmDecrypt = async (ciphertext: string, keyHex: string): Promise<string
   const encryptedData = hexToUint8Array(parts[1]);
   
   const key = await crypto.subtle.importKey(
-    "hexToUint8Array",
+    "raw",
     hexToUint8Array(keyHex),
     { name: "AES-GCM" },
     false,
