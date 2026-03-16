@@ -9,6 +9,7 @@ import AccountingComponent from "./theme/components/accounting/Accounting.vue";
 import StatComponent from "./theme/components/accounting/Stat.vue";
 import SyncComponent from "./theme/components/accounting/Sync.vue";
 import IPLookupComponent from "./theme/components/ip-lookup/IPLookup.vue";
+import CryptoToolComponent from "./theme/components/crypto-tool/CryptoTool.vue";
 
 // import './theme/styles/custom.css'
 
@@ -25,5 +26,6 @@ export default defineClientConfig({
     app.component("StatComponent", StatComponent);
     app.component("SyncComponent", SyncComponent);
     app.component("IPLookupComponent", IPLookupComponent);
+    app.component("CryptoToolComponent", CryptoToolComponent);
   },
 });
