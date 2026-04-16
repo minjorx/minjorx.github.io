@@ -26,4 +26,8 @@ config:
           theme: alt
           text: Github →
           link: https://github.com/minjorx
+        -
+          theme: alt
+          text: 数据站 →
+          link: https://data.minjor.com
 ---
