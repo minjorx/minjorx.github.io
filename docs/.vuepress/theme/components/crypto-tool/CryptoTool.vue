@@ -2,8 +2,8 @@
 import { ref, computed } from "vue";
 import { sm4Encode, sm4Decode } from 'sm4-crypto';
 
-// 当前模式：单向哈希 或 双向加解密
-const currentMode = ref<'hash' | 'cipher'>('hash');
+// 当前模式：单向哈希 / 编码解码 / 双向加解密
+const currentMode = ref<'hash' | 'encode' | 'cipher'>('hash');
 
 // ==================== 单向哈希模式 ====================
 const hashInput = ref("");
@@ -63,6 +63,68 @@ const md5 = async (str: string): Promise<string> => {
   // 使用 SHA-1 作为后备，因为浏览器原生支持
   const hashBuffer = await crypto.subtle.digest("SHA-1", data);
   return "MD5(不在Web Crypto标准中): " + arrayBufferToHex(hashBuffer).substring(0, 32).toUpperCase().padEnd(32, '0');
+};
+
+// ==================== 编码解码模式 ====================
+const encodeMode = ref<'encode' | 'decode'>('encode');
+const encodeType = ref("Base64");
+const encodeInput = ref("");
+const encodeResult = ref("");
+const encodeError = ref("");
+
+const encodeTypes = [
+  { value: "Base64", label: "Base64" },
+  { value: "URL", label: "URL 编码" },
+  { value: "ASCII", label: "ASCII（数字↔字符）" },
+  { value: "Unicode", label: "Unicode（中文转 \\u）" },
+];
+
+const processEncode = () => {
+  encodeError.value = "";
+  encodeResult.value = "";
+
+  if (!encodeInput.value) {
+    encodeError.value = "请输入要处理的内容";
+    return;
+  }
+
+  try {
+    if (encodeType.value === "Base64") {
+      if (encodeMode.value === 'encode') {
+        encodeResult.value = btoa(unescape(encodeURIComponent(encodeInput.value)));
+      } else {
+        encodeResult.value = decodeURIComponent(escape(atob(encodeInput.value)));
+      }
+    } else if (encodeType.value === "URL") {
+      if (encodeMode.value === 'encode') {
+        encodeResult.value = encodeURIComponent(encodeInput.value);
+      } else {
+        encodeResult.value = decodeURIComponent(encodeInput.value);
+      }
+    } else if (encodeType.value === "ASCII") {
+      if (encodeMode.value === 'encode') {
+        // 字符转 ASCII 数字序列
+        encodeResult.value = Array.from(encodeInput.value).map(c => c.charCodeAt(0)).join(' ');
+      } else {
+        // ASCII 数字序列转字符
+        encodeResult.value = encodeInput.value.split(/[\s,]+/).map(n => String.fromCharCode(parseInt(n))).join('');
+      }
+    } else if (encodeType.value === "Unicode") {
+      if (encodeMode.value === 'encode') {
+        // 中文转 \u4e2d 形式
+        encodeResult.value = encodeInput.value.replace(/[\s\S]/g, (m) => {
+          return '\\u' + m.charCodeAt(0).toString(16).padStart(4, '0');
+        });
+      } else {
+        // \u4e2d 转中文
+        encodeResult.value = encodeInput.value.replace(/\\u([0-9a-fA-F]{4})/g, (_, p) =>
+          String.fromCharCode(parseInt(p, 16))
+        );
+      }
+    }
+  } catch (e: any) {
+    encodeError.value = "处理失败: " + e.message;
+  }
 };
 
 // ==================== 双向加解密模式 ====================
@@ -349,14 +411,20 @@ const copyResult = async (text: string) => {
 <template>
   <div class="crypto-tool-container">
     <div class="mode-tabs">
-      <button 
-        :class="['tab-btn', currentMode === 'hash' ? 'active' : '']" 
+      <button
+        :class="['tab-btn', currentMode === 'hash' ? 'active' : '']"
         @click="currentMode = 'hash'"
       >
         🔐 单向哈希
       </button>
-      <button 
-        :class="['tab-btn', currentMode === 'cipher' ? 'active' : '']" 
+      <button
+        :class="['tab-btn', currentMode === 'encode' ? 'active' : '']"
+        @click="currentMode = 'encode'"
+      >
+        📝 编码解码
+      </button>
+      <button
+        :class="['tab-btn', currentMode === 'cipher' ? 'active' : '']"
         @click="currentMode = 'cipher'"
       >
         🔒 双向加解密
@@ -409,7 +477,71 @@ const copyResult = async (text: string) => {
         </ul>
       </div>
     </div>
-    
+
+    <!-- 编码解码模式 -->
+    <div v-if="currentMode === 'encode'" class="tool-panel">
+      <h2>📝 编码解码</h2>
+      <p class="description">支持多种格式的编码和解码转换</p>
+
+      <div class="mode-toggle">
+        <button
+          :class="['toggle-btn', encodeMode === 'encode' ? 'active' : '']"
+          @click="encodeMode = 'encode'"
+        >
+          编码 🔤
+        </button>
+        <button
+          :class="['toggle-btn', encodeMode === 'decode' ? 'active' : '']"
+          @click="encodeMode = 'decode'"
+        >
+          解码 🔍
+        </button>
+      </div>
+
+      <div class="form-group">
+        <label>编码格式</label>
+        <select v-model="encodeType" class="select-input">
+          <option v-for="t in encodeTypes" :key="t.value" :value="t.value">
+            {{ t.label }}
+          </option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label>{{ encodeMode === 'encode' ? '输入文本' : '输入编码' }}</label>
+        <textarea
+          v-model="encodeInput"
+          :placeholder="encodeMode === 'encode' ? '请输入要编码的文本...' : '请输入要解码的内容...'"
+          class="text-input"
+          rows="4"
+        ></textarea>
+      </div>
+
+      <button @click="processEncode" class="action-btn">
+        {{ encodeMode === 'encode' ? '编码' : '解码' }}
+      </button>
+
+      <p v-if="encodeError" class="error-text">{{ encodeError }}</p>
+
+      <div v-if="encodeResult" class="result-box">
+        <div class="result-header">
+          <span>{{ encodeMode === 'encode' ? '编码结果' : '解码结果' }}</span>
+          <button @click="copyResult(encodeResult)" class="copy-btn">复制</button>
+        </div>
+        <div class="result-content">{{ encodeResult }}</div>
+      </div>
+
+      <div class="info-card">
+        <h4>💡 说明</h4>
+        <ul>
+          <li><strong>Base64:</strong> 常用于传输二进制数据、邮件附件</li>
+          <li><strong>URL:</strong> URL 特殊字符编码，如空格→%20</li>
+          <li><strong>ASCII:</strong> 字符与数字互转，如 A→65，65→A</li>
+          <li><strong>Unicode:</strong> 中文转 \u 逃逸形式，如 中→\u4e2d</li>
+        </ul>
+      </div>
+    </div>
+
     <!-- 双向加解密模式 -->
     <div v-if="currentMode === 'cipher'" class="tool-panel">
       <h2>🔒 加解密工具</h2>
