@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed } from "vue";
+import { SM4 } from 'sm4-crypto';
 
 // 当前模式：单向哈希 或 双向加解密
 const currentMode = ref<'hash' | 'cipher'>('hash');
@@ -76,11 +77,17 @@ const cipherIv = ref(""); // 初始化向量
 const cipherAlgorithms = [
   { value: "AES-GCM", label: "AES-GCM (推荐)" },
   { value: "AES-CBC", label: "AES-CBC" },
+  { value: "SM4-ECB", label: "SM4-ECB (国密)" },
+  { value: "SM4-CBC", label: "SM4-CBC (国密)" },
 ];
 
 // 生成随机密钥
 const generateKey = async () => {
   try {
+    if (cipherAlgorithm.value.startsWith('SM4')) {
+      await generateSm4Key();
+      return;
+    }
     const key = await crypto.subtle.generateKey(
       { name: cipherAlgorithm.value, length: 256 },
       true,
@@ -199,6 +206,60 @@ const aesCbcDecrypt = async (ciphertext: string, keyHex: string): Promise<string
   return decoder.decode(decrypted);
 };
 
+// SM4-ECB 加密
+const sm4EcbEncrypt = async (plaintext: string, keyHex: string): Promise<string> => {
+  const key = hexToUint8Array(keyHex);
+  const encoder = new TextEncoder();
+  const data = encoder.encode(plaintext);
+  const sm4 = new SM4();
+  const encrypted = sm4.encrypt(data, key, { mode: 'ecb' });
+  return arrayBufferToHex(encrypted);
+};
+
+// SM4-ECB 解密
+const sm4EcbDecrypt = async (ciphertext: string, keyHex: string): Promise<string> => {
+  const key = hexToUint8Array(keyHex);
+  const encryptedData = hexToUint8Array(ciphertext);
+  const sm4 = new SM4();
+  const decrypted = sm4.decrypt(encryptedData, key, { mode: 'ecb' });
+  const decoder = new TextDecoder();
+  return decoder.decode(decrypted);
+};
+
+// SM4-CBC 加密
+const sm4CbcEncrypt = async (plaintext: string, keyHex: string, ivHex: string): Promise<string> => {
+  const key = hexToUint8Array(keyHex);
+  const iv = hexToUint8Array(ivHex);
+  const encoder = new TextEncoder();
+  const data = encoder.encode(plaintext);
+  const sm4 = new SM4();
+  const encrypted = sm4.encrypt(data, key, { mode: 'cbc', iv });
+  return ivHex + ":" + arrayBufferToHex(encrypted);
+};
+
+// SM4-CBC 解密
+const sm4CbcDecrypt = async (ciphertext: string, keyHex: string): Promise<string> => {
+  const parts = ciphertext.split(":");
+  if (parts.length !== 2) {
+    throw new Error("密文格式不正确，应为 IV:密文");
+  }
+  const iv = hexToUint8Array(parts[0]);
+  const encryptedData = hexToUint8Array(parts[1]);
+  const key = hexToUint8Array(keyHex);
+  const sm4 = new SM4();
+  const decrypted = sm4.decrypt(encryptedData, key, { mode: 'cbc', iv });
+  const decoder = new TextDecoder();
+  return decoder.decode(decrypted);
+};
+
+// SM4 生成随机密钥
+const generateSm4Key = async () => {
+  const key = crypto.getRandomValues(new Uint8Array(16));
+  cipherKey.value = arrayBufferToHex(key);
+  const iv = crypto.getRandomValues(new Uint8Array(16));
+  cipherIv.value = arrayBufferToHex(iv);
+};
+
 const hexToUint8Array = (hex: string): Uint8Array => {
   const bytes = new Uint8Array(hex.length / 2);
   for (let i = 0; i < hex.length; i += 2) {
@@ -211,17 +272,17 @@ const hexToUint8Array = (hex: string): Uint8Array => {
 const processCipher = async () => {
   cipherError.value = "";
   cipherResult.value = "";
-  
+
   if (!cipherInput.value) {
     cipherError.value = "请输入要处理的内容";
     return;
   }
-  
+
   if (!cipherKey.value) {
     cipherError.value = "请先生成密钥";
     return;
   }
-  
+
   try {
     if (cipherAlgorithm.value === "AES-GCM") {
       if (cipherMode.value === 'encrypt') {
@@ -229,11 +290,23 @@ const processCipher = async () => {
       } else {
         cipherResult.value = await aesGcmDecrypt(cipherInput.value, cipherKey.value);
       }
-    } else {
+    } else if (cipherAlgorithm.value === "AES-CBC") {
       if (cipherMode.value === 'encrypt') {
         cipherResult.value = await aesCbcEncrypt(cipherInput.value, cipherKey.value, cipherIv.value);
       } else {
         cipherResult.value = await aesCbcDecrypt(cipherInput.value, cipherKey.value);
+      }
+    } else if (cipherAlgorithm.value === "SM4-ECB") {
+      if (cipherMode.value === 'encrypt') {
+        cipherResult.value = await sm4EcbEncrypt(cipherInput.value, cipherKey.value);
+      } else {
+        cipherResult.value = await sm4EcbDecrypt(cipherInput.value, cipherKey.value);
+      }
+    } else if (cipherAlgorithm.value === "SM4-CBC") {
+      if (cipherMode.value === 'encrypt') {
+        cipherResult.value = await sm4CbcEncrypt(cipherInput.value, cipherKey.value, cipherIv.value);
+      } else {
+        cipherResult.value = await sm4CbcDecrypt(cipherInput.value, cipherKey.value);
       }
     }
   } catch (e: any) {
@@ -323,8 +396,8 @@ const copyResult = async (text: string) => {
     
     <!-- 双向加解密模式 -->
     <div v-if="currentMode === 'cipher'" class="tool-panel">
-      <h2>🔒 AES 加解密</h2>
-      <p class="description">使用 AES 算法对文本进行加密和解密（可逆）</p>
+      <h2>🔒 加解密工具</h2>
+      <p class="description">支持 AES 和国密 SM4 算法的文本加解密（可逆）</p>
       
       <div class="mode-toggle">
         <button 
@@ -368,7 +441,7 @@ const copyResult = async (text: string) => {
           placeholder="点击上方按钮自动生成"
           class="text-input"
         />
-        <small class="hint">IV 用于增加加密安全性，每次加密建议使用不同的 IV</small>
+        <small class="hint">IV 用于增加加密安全性，AES 使用 96 位，SM4-CBC 使用 128 位</small>
       </div>
       
       <div class="form-group">
@@ -400,9 +473,10 @@ const copyResult = async (text: string) => {
         <ul>
           <li><strong>AES-GCM:</strong> 支持认证加密 (AEAD)，推荐使用</li>
           <li><strong>AES-CBC:</strong> 传统模式，需要额外处理认证</li>
-          <li><strong>密钥:</strong> 256 位 (64 位 Hex)，必须妥善保存</li>
-          <li><strong>IV:</strong> 96 位 (24 位 Hex)，每次加密应使用不同的 IV</li>
-          <li><strong>密文格式:</strong> 加密结果为 IV:密文，格式用冒号分隔</li>
+          <li><strong>SM4-ECB/SM4-CBC:</strong> 国密对称加密算法，128位密钥</li>
+          <li><strong>密钥:</strong> AES 为 256 位，SM4 为 128 位 (16 字节，32 位 Hex)</li>
+          <li><strong>IV:</strong> AES 为 96 位，SM4-CBC 为 128 位，每次加密建议使用不同的 IV</li>
+          <li><strong>密文格式:</strong> CBC 模式加密结果为 IV:密文，ECB 模式直接为密文</li>
         </ul>
       </div>
     </div>
