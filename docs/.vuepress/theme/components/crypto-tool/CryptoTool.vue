@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed } from "vue";
-import { SM4 } from 'sm4-crypto';
+import { sm4Encode, sm4Decode } from 'sm4-crypto';
 
 // 当前模式：单向哈希 或 双向加解密
 const currentMode = ref<'hash' | 'cipher'>('hash');
@@ -208,33 +208,43 @@ const aesCbcDecrypt = async (ciphertext: string, keyHex: string): Promise<string
 
 // SM4-ECB 加密
 const sm4EcbEncrypt = async (plaintext: string, keyHex: string): Promise<string> => {
-  const key = hexToUint8Array(keyHex);
-  const encoder = new TextEncoder();
-  const data = encoder.encode(plaintext);
-  const sm4 = new SM4();
-  const encrypted = sm4.encrypt(data, key, { mode: 'ecb' });
-  return arrayBufferToHex(encrypted);
+  const result = sm4Encode({
+    content: plaintext,
+    key: keyHex,
+    keyFormat: 'hex',
+    mode: 'ecb',
+    cipherMode: 'hex',
+    padding: 'pkcs#7'
+  });
+  return result as string;
 };
 
 // SM4-ECB 解密
 const sm4EcbDecrypt = async (ciphertext: string, keyHex: string): Promise<string> => {
-  const key = hexToUint8Array(keyHex);
-  const encryptedData = hexToUint8Array(ciphertext);
-  const sm4 = new SM4();
-  const decrypted = sm4.decrypt(encryptedData, key, { mode: 'ecb' });
-  const decoder = new TextDecoder();
-  return decoder.decode(decrypted);
+  const result = sm4Decode({
+    content: ciphertext,
+    key: keyHex,
+    keyFormat: 'hex',
+    mode: 'ecb',
+    cipherMode: 'hex',
+    padding: 'pkcs#7'
+  });
+  return result as string;
 };
 
 // SM4-CBC 加密
 const sm4CbcEncrypt = async (plaintext: string, keyHex: string, ivHex: string): Promise<string> => {
-  const key = hexToUint8Array(keyHex);
-  const iv = hexToUint8Array(ivHex);
-  const encoder = new TextEncoder();
-  const data = encoder.encode(plaintext);
-  const sm4 = new SM4();
-  const encrypted = sm4.encrypt(data, key, { mode: 'cbc', iv });
-  return ivHex + ":" + arrayBufferToHex(encrypted);
+  const result = sm4Encode({
+    content: plaintext,
+    key: keyHex,
+    keyFormat: 'hex',
+    iv: ivHex,
+    ivFormat: 'hex',
+    mode: 'cbc',
+    cipherMode: 'hex',
+    padding: 'pkcs#7'
+  });
+  return ivHex + ":" + result;
 };
 
 // SM4-CBC 解密
@@ -243,13 +253,19 @@ const sm4CbcDecrypt = async (ciphertext: string, keyHex: string): Promise<string
   if (parts.length !== 2) {
     throw new Error("密文格式不正确，应为 IV:密文");
   }
-  const iv = hexToUint8Array(parts[0]);
-  const encryptedData = hexToUint8Array(parts[1]);
-  const key = hexToUint8Array(keyHex);
-  const sm4 = new SM4();
-  const decrypted = sm4.decrypt(encryptedData, key, { mode: 'cbc', iv });
-  const decoder = new TextDecoder();
-  return decoder.decode(decrypted);
+  const iv = parts[0];
+  const encryptedData = parts[1];
+  const result = sm4Decode({
+    content: encryptedData,
+    key: keyHex,
+    keyFormat: 'hex',
+    iv: iv,
+    ivFormat: 'hex',
+    mode: 'cbc',
+    cipherMode: 'hex',
+    padding: 'pkcs#7'
+  });
+  return result as string;
 };
 
 // SM4 生成随机密钥
