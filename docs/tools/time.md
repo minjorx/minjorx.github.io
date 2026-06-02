@@ -8,5 +8,5 @@ config:
 createTime: 2026/06/02 07:20:00
 ---
 <ClientOnly>
-<TimeTool />
+<TimeToolComponent />
 </ClientOnly>
