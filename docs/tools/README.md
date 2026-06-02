@@ -14,6 +14,7 @@ config:
 - **<a href="/tools/accounting">记账本</a>** -本地的，方便的记账本
 - **<a href="/tools/ip-lookup">IP 查询</a>** - 纯前端 IPv4 地址信息查询工具
 - **<a href="/tools/crypto">加密工具</a>** - 常用单向哈希 & 双向 AES 加解密
+- **<a href="/tools/time">时间工具</a>** - 时间戳与日期互转
 
 ## 使用方法
 
