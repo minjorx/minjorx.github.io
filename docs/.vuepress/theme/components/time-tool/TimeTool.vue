@@ -109,9 +109,8 @@ onUnmounted(() => {
               class="copy-btn"
               :class="{ copied: copiedKey === 'iso' }"
               @click="copyText(now.iso, 'iso')"
-              :title="copiedKey === 'iso' ? '已复制' : '复制'"
             >
-              {{ copiedKey === 'iso' ? '✓' : '📋' }}
+              {{ copiedKey === 'iso' ? '已复制' : '复制' }}
             </button>
           </div>
         </div>
@@ -125,7 +124,7 @@ onUnmounted(() => {
               @click="copyText(now.local, 'local')"
               :title="copiedKey === 'local' ? '已复制' : '复制'"
             >
-              {{ copiedKey === 'local' ? '✓' : '📋' }}
+              {{ copiedKey === 'local' ? '已复制' : '复制' }}
             </button>
           </div>
         </div>
@@ -139,7 +138,7 @@ onUnmounted(() => {
               @click="copyText(now.ms.toString(), 'ms')"
               :title="copiedKey === 'ms' ? '已复制' : '复制'"
             >
-              {{ copiedKey === 'ms' ? '✓' : '📋' }}
+              {{ copiedKey === 'ms' ? '已复制' : '复制' }}
             </button>
           </div>
         </div>
@@ -153,7 +152,7 @@ onUnmounted(() => {
               @click="copyText(now.s.toString(), 's')"
               :title="copiedKey === 's' ? '已复制' : '复制'"
             >
-              {{ copiedKey === 's' ? '✓' : '复制' }}
+              {{ copiedKey === 's' ? '已复制' : '复制' }}
             </button>
           </div>
         </div>
@@ -182,7 +181,7 @@ onUnmounted(() => {
             @click="copyText(tsResult.utc, 'ts-utc')"
             :title="copiedKey === 'ts-utc' ? '已复制' : '复制'"
           >
-            {{ copiedKey === 'ts-utc' ? '✓' : '📋' }}
+            {{ copiedKey === 'ts-utc' ? '已复制' : '复制' }}
           </button>
         </div>
         <div class="result-row">
@@ -194,7 +193,7 @@ onUnmounted(() => {
             @click="copyText(tsResult.local, 'ts-local')"
             :title="copiedKey === 'ts-local' ? '已复制' : '复制'"
           >
-            {{ copiedKey === 'ts-local' ? '✓' : '📋' }}
+            {{ copiedKey === 'ts-local' ? '已复制' : '复制' }}
           </button>
         </div>
       </div>
@@ -222,7 +221,7 @@ onUnmounted(() => {
             @click="copyText(secResult.utc, 'sec-utc')"
             :title="copiedKey === 'sec-utc' ? '已复制' : '复制'"
           >
-            {{ copiedKey === 'sec-utc' ? '✓' : '📋' }}
+            {{ copiedKey === 'sec-utc' ? '已复制' : '复制' }}
           </button>
         </div>
         <div class="result-row">
@@ -234,7 +233,7 @@ onUnmounted(() => {
             @click="copyText(secResult.local, 'sec-local')"
             :title="copiedKey === 'sec-local' ? '已复制' : '复制'"
           >
-            {{ copiedKey === 'sec-local' ? '✓' : '📋' }}
+            {{ copiedKey === 'sec-local' ? '已复制' : '复制' }}
           </button>
         </div>
       </div>
@@ -261,7 +260,7 @@ onUnmounted(() => {
             @click="copyText(dateResult.ms, 'dt-ms')"
             :title="copiedKey === 'dt-ms' ? '已复制' : '复制'"
           >
-            {{ copiedKey === 'dt-ms' ? '✓' : '📋' }}
+            {{ copiedKey === 'dt-ms' ? '已复制' : '复制' }}
           </button>
         </div>
         <div class="result-row">
@@ -273,7 +272,7 @@ onUnmounted(() => {
             @click="copyText(dateResult.s, 'dt-s')"
             :title="copiedKey === 'dt-s' ? '已复制' : '复制'"
           >
-            {{ copiedKey === 'dt-s' ? '✓' : '📋' }}
+            {{ copiedKey === 'dt-s' ? '已复制' : '复制' }}
           </button>
         </div>
       </div>
