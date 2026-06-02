@@ -18,6 +18,21 @@ function refreshNow() {
   now.s = Math.floor(d.getTime() / 1000);
 }
 
+// 复制功能
+const copiedKey = ref<string | null>(null);
+
+async function copyText(text: string, key: string) {
+  try {
+    await navigator.clipboard.writeText(text);
+    copiedKey.value = key;
+    setTimeout(() => {
+      if (copiedKey.value === key) copiedKey.value = null;
+    }, 1500);
+  } catch (e) {
+    console.error('复制失败', e);
+  }
+}
+
 // 毫秒时间戳 → 日期
 const tsInput = ref("");
 const tsResult = ref<{ utc: string; local: string } | null>(null);
@@ -50,11 +65,19 @@ function convertSecToDate() {
 
 // 日期 → 时间戳
 const dateInput = ref("");
+
+function getDefaultDatetimeLocal() {
+  const d = new Date();
+  const pad = (n: number) => n.toString().padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+const dateInputInit = ref(getDefaultDatetimeLocal());
 const dateResult = ref<{ ms: string; s: string } | null>(null);
 
 function convertDateToTs() {
-  if (!dateInput.value.trim()) return;
-  const d = new Date(dateInput.value.trim());
+  if (!dateInput.value) return;
+  const d = new Date(dateInput.value);
   if (isNaN(d.getTime())) return;
   dateResult.value = {
     ms: d.getTime().toString(),
@@ -65,6 +88,7 @@ function convertDateToTs() {
 onMounted(() => {
   refreshNow();
   nowTimer = window.setInterval(refreshNow, 1000);
+  dateInput.value = dateInputInit.value;
 });
 
 onUnmounted(() => {
@@ -79,19 +103,59 @@ onUnmounted(() => {
       <div class="now-grid">
         <div class="now-item">
           <span class="label">ISO 格式</span>
-          <span class="value">{{ now.iso }}</span>
+          <div class="value-row">
+            <span class="value">{{ now.iso }}</span>
+            <button
+              class="copy-btn"
+              :class="{ copied: copiedKey === 'iso' }"
+              @click="copyText(now.iso, 'iso')"
+              :title="copiedKey === 'iso' ? '已复制' : '复制'"
+            >
+              {{ copiedKey === 'iso' ? '✓' : '📋' }}
+            </button>
+          </div>
         </div>
         <div class="now-item">
           <span class="label">本地格式</span>
-          <span class="value">{{ now.local }}</span>
+          <div class="value-row">
+            <span class="value">{{ now.local }}</span>
+            <button
+              class="copy-btn"
+              :class="{ copied: copiedKey === 'local' }"
+              @click="copyText(now.local, 'local')"
+              :title="copiedKey === 'local' ? '已复制' : '复制'"
+            >
+              {{ copiedKey === 'local' ? '✓' : '📋' }}
+            </button>
+          </div>
         </div>
         <div class="now-item">
           <span class="label">时间戳（毫秒）</span>
-          <span class="value highlight">{{ now.ms }}</span>
+          <div class="value-row">
+            <span class="value highlight">{{ now.ms }}</span>
+            <button
+              class="copy-btn"
+              :class="{ copied: copiedKey === 'ms' }"
+              @click="copyText(now.ms.toString(), 'ms')"
+              :title="copiedKey === 'ms' ? '已复制' : '复制'"
+            >
+              {{ copiedKey === 'ms' ? '✓' : '📋' }}
+            </button>
+          </div>
         </div>
         <div class="now-item">
           <span class="label">时间戳（秒）</span>
-          <span class="value highlight">{{ now.s }}</span>
+          <div class="value-row">
+            <span class="value highlight">{{ now.s }}</span>
+            <button
+              class="copy-btn"
+              :class="{ copied: copiedKey === 's' }"
+              @click="copyText(now.s.toString(), 's')"
+              :title="copiedKey === 's' ? '已复制' : '复制'"
+            >
+              {{ copiedKey === 's' ? '✓' : '复制' }}
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -109,8 +173,30 @@ onUnmounted(() => {
         <button @click="convertTsToDate" class="tool-btn">转换</button>
       </div>
       <div v-if="tsResult" class="result-box">
-        <div><span class="label">UTC:</span> {{ tsResult.utc }}</div>
-        <div><span class="label">本地:</span> {{ tsResult.local }}</div>
+        <div class="result-row">
+          <span class="label">UTC:</span>
+          <span class="result-value">{{ tsResult.utc }}</span>
+          <button
+            class="copy-btn small"
+            :class="{ copied: copiedKey === 'ts-utc' }"
+            @click="copyText(tsResult.utc, 'ts-utc')"
+            :title="copiedKey === 'ts-utc' ? '已复制' : '复制'"
+          >
+            {{ copiedKey === 'ts-utc' ? '✓' : '📋' }}
+          </button>
+        </div>
+        <div class="result-row">
+          <span class="label">本地:</span>
+          <span class="result-value">{{ tsResult.local }}</span>
+          <button
+            class="copy-btn small"
+            :class="{ copied: copiedKey === 'ts-local' }"
+            @click="copyText(tsResult.local, 'ts-local')"
+            :title="copiedKey === 'ts-local' ? '已复制' : '复制'"
+          >
+            {{ copiedKey === 'ts-local' ? '✓' : '📋' }}
+          </button>
+        </div>
       </div>
     </div>
 
@@ -127,8 +213,30 @@ onUnmounted(() => {
         <button @click="convertSecToDate" class="tool-btn">转换</button>
       </div>
       <div v-if="secResult" class="result-box">
-        <div><span class="label">UTC:</span> {{ secResult.utc }}</div>
-        <div><span class="label">本地:</span> {{ secResult.local }}</div>
+        <div class="result-row">
+          <span class="label">UTC:</span>
+          <span class="result-value">{{ secResult.utc }}</span>
+          <button
+            class="copy-btn small"
+            :class="{ copied: copiedKey === 'sec-utc' }"
+            @click="copyText(secResult.utc, 'sec-utc')"
+            :title="copiedKey === 'sec-utc' ? '已复制' : '复制'"
+          >
+            {{ copiedKey === 'sec-utc' ? '✓' : '📋' }}
+          </button>
+        </div>
+        <div class="result-row">
+          <span class="label">本地:</span>
+          <span class="result-value">{{ secResult.local }}</span>
+          <button
+            class="copy-btn small"
+            :class="{ copied: copiedKey === 'sec-local' }"
+            @click="copyText(secResult.local, 'sec-local')"
+            :title="copiedKey === 'sec-local' ? '已复制' : '复制'"
+          >
+            {{ copiedKey === 'sec-local' ? '✓' : '📋' }}
+          </button>
+        </div>
       </div>
     </div>
 
@@ -137,16 +245,37 @@ onUnmounted(() => {
       <div class="input-group">
         <input
           v-model="dateInput"
-          type="text"
-          placeholder="输入日期时间，如 2026-01-01T12:00:00"
-          @keyup.enter="convertDateToTs"
-          class="tool-input"
+          type="datetime-local"
+          @change="convertDateToTs"
+          class="tool-input datetime-input"
         />
         <button @click="convertDateToTs" class="tool-btn">转换</button>
       </div>
       <div v-if="dateResult" class="result-box">
-        <div><span class="label">毫秒:</span> {{ dateResult.ms }}</div>
-        <div><span class="label">秒:</span> {{ dateResult.s }}</div>
+        <div class="result-row">
+          <span class="label">毫秒:</span>
+          <span class="result-value highlight">{{ dateResult.ms }}</span>
+          <button
+            class="copy-btn small"
+            :class="{ copied: copiedKey === 'dt-ms' }"
+            @click="copyText(dateResult.ms, 'dt-ms')"
+            :title="copiedKey === 'dt-ms' ? '已复制' : '复制'"
+          >
+            {{ copiedKey === 'dt-ms' ? '✓' : '📋' }}
+          </button>
+        </div>
+        <div class="result-row">
+          <span class="label">秒:</span>
+          <span class="result-value highlight">{{ dateResult.s }}</span>
+          <button
+            class="copy-btn small"
+            :class="{ copied: copiedKey === 'dt-s' }"
+            @click="copyText(dateResult.s, 'dt-s')"
+            :title="copiedKey === 'dt-s' ? '已复制' : '复制'"
+          >
+            {{ copiedKey === 'dt-s' ? '✓' : '📋' }}
+          </button>
+        </div>
       </div>
     </div>
   </div>
@@ -193,16 +322,52 @@ onUnmounted(() => {
   color: var(--vp-c-text-2);
 }
 
+.value-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .now-item .value {
   font-size: 14px;
   font-weight: 600;
   color: var(--vp-c-text-1);
   font-family: monospace;
   word-break: break-all;
+  flex: 1;
 }
 
 .now-item .value.highlight {
   color: var(--vp-c-brand-1);
+}
+
+.copy-btn {
+  background: none;
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 4px;
+  cursor: pointer;
+  padding: 2px 6px;
+  font-size: 12px;
+  color: var(--vp-c-text-2);
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+
+.copy-btn:hover {
+  background: var(--vp-c-brand-soft);
+  border-color: var(--vp-c-brand-1);
+  color: var(--vp-c-brand-1);
+}
+
+.copy-btn.copied {
+  background: var(--vp-c-brand-soft);
+  border-color: var(--vp-c-brand-1);
+  color: var(--vp-c-brand-1);
+}
+
+.copy-btn.small {
+  font-size: 11px;
+  padding: 1px 5px;
 }
 
 .input-group {
@@ -226,6 +391,10 @@ onUnmounted(() => {
 
 .tool-input:focus {
   border-color: var(--vp-c-brand-2);
+}
+
+.datetime-input {
+  color-scheme: light dark;
 }
 
 .tool-btn {
@@ -254,12 +423,27 @@ onUnmounted(() => {
   color: var(--vp-c-text-1);
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
+}
+
+.result-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .result-box .label {
   color: var(--vp-c-text-2);
   font-weight: 600;
-  margin-right: 4px;
+  min-width: 40px;
+}
+
+.result-value {
+  flex: 1;
+  word-break: break-all;
+}
+
+.result-value.highlight {
+  color: var(--vp-c-brand-1);
 }
 </style>
