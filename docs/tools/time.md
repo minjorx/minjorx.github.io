@@ -7,4 +7,6 @@ config:
     type: custom
 createTime: 2026/06/02 07:20:00
 ---
+<ClientOnly>
 <TimeTool />
+</ClientOnly>
