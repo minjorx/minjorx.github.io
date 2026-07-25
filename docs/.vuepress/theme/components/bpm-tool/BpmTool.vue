@@ -91,6 +91,20 @@ const TAP_DEBOUNCE = 60; // ms
 // 防止穿透到滚动：pointerdown 起点距抬起点超过这个像素视为滚动
 const TAP_MAX_DRIFT = 12; // px
 
+// localStorage 节流：高频 tap 时合并写入，避免每次都 stringify 整个数组
+let persistTimer: number | null = null;
+function schedulePersist() {
+  if (persistTimer !== null) return;
+  persistTimer = window.setTimeout(() => {
+    persistTimer = null;
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(allTaps.value));
+    } catch {
+      /* 容量满，忽略 */
+    }
+  }, 800);
+}
+
 interface PointerTrace {
   startX: number;
   startY: number;
@@ -313,12 +327,8 @@ function registerTap() {
   allTaps.value.push(now);
   tapCount.value++;
 
-  // 持久化（节流：仅在每次新增时写一次，量不大可接受）
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(allTaps.value));
-  } catch {
-    /* 容量满，忽略 */
-  }
+  // 持久化（debounce 800ms 合并写入，避免高频 tap 时反复 stringify 整个数组）
+  schedulePersist();
 
   // 计算本拍的指标
   const ts = allTaps.value;
@@ -338,7 +348,7 @@ function registerTap() {
 
   recompute();
 
-  // 脉冲反馈
+  // 脉冲反馈：递增 pulse 触发 ripple DOM 重挂，从而重启动画
   pulse.value++;
 }
 
@@ -367,16 +377,16 @@ function resetTaps() {
   allTaps.value = [];
   samples.value = [];
   tapCount.value = 0;
+  if (persistTimer !== null) {
+    clearTimeout(persistTimer);
+    persistTimer = null;
+  }
   try {
     localStorage.removeItem(STORAGE_KEY);
   } catch {
     /* ignore */
   }
   recompute();
-}
-
-function clearAndStart() {
-  resetTaps();
 }
 
 // ==================== 指针处理（防穿透到滚动）===================
@@ -486,7 +496,7 @@ function onRangeChange(k: RangeKey) {
       <div
         class="tap-target"
         role="button"
-        aria-label="点击或轻拍来测 BPM"
+        aria-label="点击或轻拍来测心率"
         @pointerdown="onPointerDown"
         @pointermove="onPointerMove"
         @pointerup="onPointerUp"
@@ -495,6 +505,7 @@ function onRangeChange(k: RangeKey) {
       >
         <div class="tap-hint">TAP</div>
         <div class="tap-sub">用手指感受心跳节奏，每跳轻点一次</div>
+        <!-- 用 :key="pulse" 每次重挂元素来确保动画从头开始播放 -->
         <div :key="pulse" class="tap-ripple"></div>
       </div>
 
@@ -594,6 +605,26 @@ function onRangeChange(k: RangeKey) {
   max-width: 720px;
   margin: 0 auto;
   padding: 20px;
+  /* 整个工具页禁用文本选择 / 长按菜单 —— 交互页面，文字选中无意义且容易误触 */
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-user-drag: none;
+  /* 禁止长按高亮 / iOS 灰底 */
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* 全局：所有 button 元素禁用长按高亮 + 选中 + focus 框 */
+.bpm-tool-container button {
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+  outline: none;
+}
+.bpm-tool-container button:focus-visible {
+  outline: 2px solid var(--vp-c-brand-1);
+  outline-offset: 2px;
 }
 
 .tool-section {
@@ -679,16 +710,23 @@ function onRangeChange(k: RangeKey) {
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  user-select: none;
-  -webkit-user-select: none;
+  /* user-select / tap-highlight 由容器继承 */
   touch-action: manipulation;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
   transition: transform 0.08s ease;
   overflow: hidden;
+  /* 去掉点击后浏览器的浅蓝色 focus outline 框 */
+  outline: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .tap-target:active {
   transform: scale(0.97);
+}
+
+/* 键盘聚焦时给一个柔和的品牌色环作为可访问性提示（视觉上不破坏） */
+.tap-target:focus-visible {
+  box-shadow: 0 0 0 4px var(--vp-c-brand-soft), 0 8px 24px rgba(0, 0, 0, 0.18);
 }
 
 .tap-hint {
@@ -712,12 +750,14 @@ function onRangeChange(k: RangeKey) {
   inset: 0;
   border-radius: 50%;
   pointer-events: none;
-  animation: tap-ripple 0.5s ease-out forwards;
+  animation: tap-ripple 0.5s ease-out;
 }
 
+/* 关键：动画结束后回归空 box-shadow，避免旧元素残留 80px 透明阴影 */
 @keyframes tap-ripple {
   0% { box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.7); }
-  100% { box-shadow: 0 0 0 80px rgba(255, 255, 255, 0); }
+  99% { box-shadow: 0 0 0 80px rgba(255, 255, 255, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(255, 255, 255, 0); }
 }
 
 /* ===== BPM 数字 ===== */
