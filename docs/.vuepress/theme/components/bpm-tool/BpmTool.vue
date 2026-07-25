@@ -380,6 +380,8 @@ function clearAndStart() {
 }
 
 // ==================== 指针处理（防穿透到滚动）===================
+// iOS Safari 上 @touchstart.prevent 会阻断后续合成 click，所以这里不调 preventDefault。
+// 改用 pointerdown 记录起点，click 统一处理 tap，移动端阈值放宽到 18px。
 function onPointerDown(e: PointerEvent) {
   pendingTrace = {
     startX: e.clientX,
@@ -398,36 +400,23 @@ function onPointerMove(e: PointerEvent) {
   }
 }
 
-function onPointerUp(e: PointerEvent) {
-  // iOS Safari 上 click 仍可能触发，所以这里不直接注册
-  if (!pendingTrace) return;
-  const trace = pendingTrace;
-  pendingTrace = null;
-  if (!trace.valid) return;
-  // 抬起点也要校验
-  const dx = e.clientX - trace.startX;
-  const dy = e.clientY - trace.startY;
-  if (Math.hypot(dx, dy) > TAP_MAX_DRIFT) return;
-  if (performance.now() - trace.startT > 1500) return; // 按住超过 1.5s 不算 tap
-  // 在 click 事件里再注册一次会更稳；这里先跳过，让 click 处理
+function onPointerUp(_e: PointerEvent) {
+  // 这里不消费 pendingTrace —— 把 trace 留给 click 处理
+  // 也不在 pointerup 阶段直接注册 tap，避免与 click 双重触发
 }
 
-function onClick(e: MouseEvent) {
-  if (!pendingTrace) {
-    // 纯鼠标点击（无 pointer 事件回退路径）
-    registerTap();
-    return;
+function onClick(_e: MouseEvent) {
+  // 桌面：pendingTrace 通常是 null（没触发 pointer 事件），走 fallback 注册
+  // 移动：pendingTrace 由 pointerdown 设置，pointerup 不消费，由这里统一注册
+  const trace = pendingTrace;
+  pendingTrace = null;
+
+  if (trace) {
+    if (!trace.valid) return;
+    // 再校验一次时长
+    if (performance.now() - trace.startT > 1500) return;
   }
-  const trace = pendingTrace;
-  pendingTrace = null;
-  if (!trace.valid) return;
   registerTap();
-}
-
-// 阻止移动端的默认手势（双击放大、长按选择等）
-function onTouchStart(e: TouchEvent) {
-  if (e.touches.length > 1) return; // 多指不阻拦（缩放手势）
-  e.preventDefault();
 }
 
 const chartStyle = computed(() => ({ width: "100%", height: "260px" }));
@@ -503,7 +492,6 @@ function onRangeChange(k: RangeKey) {
         @pointerup="onPointerUp"
         @pointercancel="pendingTrace = null"
         @click="onClick"
-        @touchstart="onTouchStart"
       >
         <div class="tap-hint">TAP</div>
         <div class="tap-sub">用手指感受心跳节奏，每跳轻点一次</div>
