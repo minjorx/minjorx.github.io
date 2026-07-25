@@ -15,6 +15,7 @@ config:
 - **<a href="/tools/ip-lookup">IP 查询</a>** - 纯前端 IPv4 地址信息查询工具
 - **<a href="/tools/crypto">加密工具</a>** - 常用单向哈希 & 双向 AES 加解密
 - **<a href="/tools/time">时间工具</a>** - 时间戳与日期互转
+- **<a href="/tools/bpm">BPM 工具</a>** - 跟着节拍轻点，测节奏速度与稳定性
 
 ## 使用方法
 

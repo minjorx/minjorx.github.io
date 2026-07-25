@@ -25,6 +25,7 @@
     "node": "^20.19.0 || >=22.0.0"
   },
   "dependencies": {
+    "blueimp-md5": "^2.19.0",
     "echarts": "^6.0.0",
     "sm4-crypto": "^1.0.2"
   }

@@ -1,6 +1,11 @@
 <script setup lang="ts">
 import { ref, computed } from "vue";
 import { sm4Encode, sm4Decode } from 'sm4-crypto';
+import md5 from 'blueimp-md5';
+
+// 模块级复用，避免每个加密函数 new 一次
+const utf8Encoder = new TextEncoder();
+const utf8Decoder = new TextDecoder();
 
 // 当前模式：单向哈希 / 编码解码 / 双向加解密
 const currentMode = ref<'hash' | 'encode' | 'cipher'>('hash');
@@ -23,22 +28,18 @@ const hashAlgorithms = [
 const computeHash = async () => {
   hashError.value = "";
   hashResult.value = "";
-  
+
   if (!hashInput.value) {
     hashError.value = "请输入要哈希的文本";
     return;
   }
-  
+
   try {
-    const encoder = new TextEncoder();
-    const data = encoder.encode(hashInput.value);
-    
-    // MD5 和 SHA-1 不被 Web Crypto 支持，使用第三方实现
+    const data = utf8Encoder.encode(hashInput.value);
+
+    // MD5 不被 Web Crypto 支持，使用 blueimp-md5 实现
     if (hashAlgorithm.value === "MD5") {
       hashResult.value = await md5(hashInput.value);
-    } else if (hashAlgorithm.value === "SHA-1") {
-      const hashBuffer = await crypto.subtle.digest("SHA-1", data);
-      hashResult.value = arrayBufferToHex(hashBuffer);
     } else {
       const hashBuffer = await crypto.subtle.digest(hashAlgorithm.value, data);
       hashResult.value = arrayBufferToHex(hashBuffer);
@@ -48,21 +49,22 @@ const computeHash = async () => {
   }
 };
 
-const arrayBufferToHex = (buffer: ArrayBuffer): string => {
-  const byteArray = new Uint8Array(buffer);
-  return Array.from(byteArray, byte => byte.toString(16).padStart(2, '0')).join('');
-};
+const HEX_LOOKUP = (() => {
+  const arr: string[] = [];
+  for (let i = 0; i < 256; i++) arr.push(i.toString(16).padStart(2, '0'));
+  return arr;
+})();
 
-// 简单的 MD5 实现
-const md5 = async (str: string): Promise<string> => {
-  // 使用第三方 md5 库的简化版本 - 这里用 API 兼容的方式
-  // 由于浏览器不原生支持 MD5，我们用编码后的数据做简单哈希
-  const encoder = new TextEncoder();
-  const data = encoder.encode(str);
-  
-  // 使用 SHA-1 作为后备，因为浏览器原生支持
-  const hashBuffer = await crypto.subtle.digest("SHA-1", data);
-  return "MD5(不在Web Crypto标准中): " + arrayBufferToHex(hashBuffer).substring(0, 32).toUpperCase().padEnd(32, '0');
+const arrayBufferToHex = (buffer: ArrayBuffer | ArrayBufferView): string => {
+  // 优先走 Uint8Array 快速路径，避免 Array.from + map 的中间数组
+  const bytes = buffer instanceof Uint8Array
+    ? buffer
+    : new Uint8Array(buffer instanceof ArrayBuffer ? buffer : buffer.buffer);
+  let out = '';
+  for (let i = 0; i < bytes.length; i++) {
+    out += HEX_LOOKUP[bytes[i]];
+  }
+  return out;
 };
 
 // ==================== 编码解码模式 ====================
@@ -91,9 +93,16 @@ const processEncode = () => {
   try {
     if (encodeType.value === "Base64") {
       if (encodeMode.value === 'encode') {
-        encodeResult.value = btoa(unescape(encodeURIComponent(encodeInput.value)));
+        // 用 TextEncoder 把任意字符转 UTF-8 字节后再 btoa，避免中文/emoji 抛 InvalidCharacterError
+        const bytes = utf8Encoder.encode(encodeInput.value);
+        let bin = '';
+        for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+        encodeResult.value = btoa(bin);
       } else {
-        encodeResult.value = decodeURIComponent(escape(atob(encodeInput.value)));
+        const bin = atob(encodeInput.value);
+        const bytes = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+        encodeResult.value = utf8Decoder.decode(bytes);
       }
     } else if (encodeType.value === "URL") {
       if (encodeMode.value === 'encode') {
@@ -169,7 +178,7 @@ const generateKey = async () => {
 const aesGcmEncrypt = async (plaintext: string, keyHex: string, ivHex: string): Promise<string> => {
   const keyData = hexToUint8Array(keyHex);
   const iv = hexToUint8Array(ivHex);
-  
+
   const key = await crypto.subtle.importKey(
     "raw",
     keyData,
@@ -177,14 +186,13 @@ const aesGcmEncrypt = async (plaintext: string, keyHex: string, ivHex: string): 
     false,
     ["encrypt"]
   );
-  
-  const encoder = new TextEncoder();
+
   const encrypted = await crypto.subtle.encrypt(
     { name: "AES-GCM", iv },
     key,
-    encoder.encode(plaintext)
+    utf8Encoder.encode(plaintext)
   );
-  
+
   // 返回 IV + 密文
   return ivHex + ":" + arrayBufferToHex(encrypted);
 };
@@ -195,10 +203,10 @@ const aesGcmDecrypt = async (ciphertext: string, keyHex: string): Promise<string
   if (parts.length !== 2) {
     throw new Error("密文格式不正确，应为 IV:密文");
   }
-  
+
   const iv = hexToUint8Array(parts[0]);
   const encryptedData = hexToUint8Array(parts[1]);
-  
+
   const key = await crypto.subtle.importKey(
     "raw",
     hexToUint8Array(keyHex),
@@ -206,22 +214,21 @@ const aesGcmDecrypt = async (ciphertext: string, keyHex: string): Promise<string
     false,
     ["decrypt"]
   );
-  
+
   const decrypted = await crypto.subtle.decrypt(
     { name: "AES-GCM", iv },
     key,
     encryptedData
   );
-  
-  const decoder = new TextDecoder();
-  return decoder.decode(decrypted);
+
+  return utf8Decoder.decode(decrypted);
 };
 
 // AES-CBC 加密
 const aesCbcEncrypt = async (plaintext: string, keyHex: string, ivHex: string): Promise<string> => {
   const keyData = hexToUint8Array(keyHex);
   const iv = hexToUint8Array(ivHex);
-  
+
   const key = await crypto.subtle.importKey(
     "raw",
     keyData,
@@ -229,14 +236,13 @@ const aesCbcEncrypt = async (plaintext: string, keyHex: string, ivHex: string): 
     false,
     ["encrypt"]
   );
-  
-  const encoder = new TextEncoder();
+
   const encrypted = await crypto.subtle.encrypt(
     { name: "AES-CBC", iv },
     key,
-    encoder.encode(plaintext)
+    utf8Encoder.encode(plaintext)
   );
-  
+
   return ivHex + ":" + arrayBufferToHex(encrypted);
 };
 
@@ -246,10 +252,10 @@ const aesCbcDecrypt = async (ciphertext: string, keyHex: string): Promise<string
   if (parts.length !== 2) {
     throw new Error("密文格式不正确");
   }
-  
+
   const iv = hexToUint8Array(parts[0]);
   const encryptedData = hexToUint8Array(parts[1]);
-  
+
   const key = await crypto.subtle.importKey(
     "raw",
     hexToUint8Array(keyHex),
@@ -257,46 +263,43 @@ const aesCbcDecrypt = async (ciphertext: string, keyHex: string): Promise<string
     false,
     ["decrypt"]
   );
-  
+
   const decrypted = await crypto.subtle.decrypt(
     { name: "AES-CBC", iv },
     key,
     encryptedData
   );
-  
-  const decoder = new TextDecoder();
-  return decoder.decode(decrypted);
+
+  return utf8Decoder.decode(decrypted);
 };
 
 // SM4-ECB 加密
-const sm4EcbEncrypt = async (plaintext: string, keyHex: string): Promise<string> => {
-  const result = sm4Encode({
+const sm4EcbEncrypt = (plaintext: string, keyHex: string): string => {
+  return sm4Encode({
     content: plaintext,
     key: keyHex,
     keyFormat: 'hex',
     mode: 'ecb',
     cipherMode: 'hex',
-    padding: 'pkcs#7'
+    padding: 'pkcs#7',
   });
-  return result as string;
 };
 
 // SM4-ECB 解密
-const sm4EcbDecrypt = async (ciphertext: string, keyHex: string): Promise<string> => {
-  const result = sm4Decode({
+const sm4EcbDecrypt = (ciphertext: string, keyHex: string): string => {
+  return sm4Decode({
     content: ciphertext,
     key: keyHex,
     keyFormat: 'hex',
     mode: 'ecb',
     cipherMode: 'hex',
-    padding: 'pkcs#7'
+    padding: 'pkcs#7',
   });
-  return result as string;
 };
 
 // SM4-CBC 加密
-const sm4CbcEncrypt = async (plaintext: string, keyHex: string, ivHex: string): Promise<string> => {
-  const result = sm4Encode({
+const sm4CbcEncrypt = (plaintext: string, keyHex: string, ivHex: string): string => {
+  const cipher = sm4Encode({
     content: plaintext,
     key: keyHex,
     keyFormat: 'hex',
@@ -304,30 +307,27 @@ const sm4CbcEncrypt = async (plaintext: string, keyHex: string, ivHex: string): 
     ivFormat: 'hex',
     mode: 'cbc',
     cipherMode: 'hex',
-    padding: 'pkcs#7'
+    padding: 'pkcs#7',
   });
-  return ivHex + ":" + result;
+  return ivHex + ":" + cipher;
 };
 
 // SM4-CBC 解密
-const sm4CbcDecrypt = async (ciphertext: string, keyHex: string): Promise<string> => {
+const sm4CbcDecrypt = (ciphertext: string, keyHex: string): string => {
   const parts = ciphertext.split(":");
   if (parts.length !== 2) {
     throw new Error("密文格式不正确，应为 IV:密文");
   }
-  const iv = parts[0];
-  const encryptedData = parts[1];
-  const result = sm4Decode({
-    content: encryptedData,
+  return sm4Decode({
+    content: parts[1],
     key: keyHex,
     keyFormat: 'hex',
-    iv: iv,
+    iv: parts[0],
     ivFormat: 'hex',
     mode: 'cbc',
     cipherMode: 'hex',
-    padding: 'pkcs#7'
+    padding: 'pkcs#7',
   });
-  return result as string;
 };
 
 // SM4 生成随机密钥
@@ -338,10 +338,18 @@ const generateSm4Key = async () => {
   cipherIv.value = arrayBufferToHex(iv);
 };
 
-const hexToUint8Array = (hex: string): Uint8Array => {
-  const bytes = new Uint8Array(hex.length / 2);
+const hexToUint8Array = (hex: string): Uint8Array<ArrayBuffer> => {
+  if (hex.length % 2 !== 0) {
+    throw new Error("Hex 字符串长度必须为偶数");
+  }
+  const buffer = new ArrayBuffer(hex.length / 2);
+  const bytes = new Uint8Array(buffer);
   for (let i = 0; i < hex.length; i += 2) {
-    bytes[i / 2] = parseInt(hex.substr(i, 2), 16);
+    const byte = parseInt(hex.substring(i, i + 2), 16);
+    if (Number.isNaN(byte)) {
+      throw new Error(`无效的 Hex 字符: "${hex.substring(i, i + 2)}"`);
+    }
+    bytes[i / 2] = byte;
   }
   return bytes;
 };
