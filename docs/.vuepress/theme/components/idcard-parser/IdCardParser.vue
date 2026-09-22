@@ -364,8 +364,6 @@ const CITY_MAP: Record<string, string> = {
   "6505": "哈密市",
 };
 
-const ZODIAC = ["鼠", "牛", "虎", "兔", "龙", "蛇", "马", "羊", "猴", "鸡", "狗", "猪"];
-
 // ---------- 类型定义 ----------
 
 interface ParsedIdCard {
@@ -378,8 +376,6 @@ interface ParsedIdCard {
   birth: string;           // YYYY-MM-DD
   age: number;
   gender: string;          // 男 / 女
-  zodiac: string;          // 生肖
-  constellation: string;   // 星座
 }
 
 // ---------- 工具方法 ----------
@@ -389,25 +385,6 @@ function calcAge(birth: Date, now = new Date()): number {
   const m = now.getMonth() - birth.getMonth();
   if (m < 0 || (m === 0 && now.getDate() < birth.getDate())) age--;
   return age;
-}
-
-function getZodiac(year: number): string {
-  // 1900 年为鼠年
-  return ZODIAC[(year - 1900) % 12];
-}
-
-function getConstellation(month: number, day: number): string {
-  const ranges = [
-    [1, 20, "摩羯座"], [2, 19, "水瓶座"], [3, 21, "双鱼座"],
-    [4, 20, "白羊座"], [5, 21, "金牛座"], [6, 22, "双子座"],
-    [7, 23, "巨蟹座"], [8, 23, "狮子座"], [9, 23, "处女座"],
-    [10, 24, "天秤座"], [11, 23, "天蝎座"], [12, 22, "射手座"],
-    [12, 32, "摩羯座"],
-  ] as const;
-  for (const [m, d, name] of ranges) {
-    if (month < m || (month === m && day <= d)) return name;
-  }
-  return "摩羯座";
 }
 
 function lookupRegion(regionCode: string): { province: string; city: string } {
@@ -475,7 +452,7 @@ function validate15(id: string): { ok: boolean; reason?: string } {
 function parseOne(raw: string): ParsedIdCard {
   const id = raw.trim();
   if (!id) {
-    return { raw, valid: false, errMsg: "空", region: "", province: "", city: "", birth: "", age: 0, gender: "", zodiac: "", constellation: "" };
+    return { raw, valid: false, errMsg: "空", region: "", province: "", city: "", birth: "", age: 0, gender: "" };
   }
 
   let regionCode = "";
@@ -503,14 +480,14 @@ function parseOne(raw: string): ParsedIdCard {
   } else {
     return {
       raw, valid: false, errMsg: "长度应为 15 或 18 位",
-      region: "", province: "", city: "", birth: "", age: 0, gender: "", zodiac: "", constellation: "",
+      region: "", province: "", city: "", birth: "", age: 0, gender: "",
     };
   }
 
   if (!validation.ok) {
     return {
       raw, valid: false, errMsg: validation.reason,
-      region: "", province: "", city: "", birth: "", age: 0, gender: "", zodiac: "", constellation: "",
+      region: "", province: "", city: "", birth: "", age: 0, gender: "",
     };
   }
 
@@ -527,8 +504,6 @@ function parseOne(raw: string): ParsedIdCard {
     birth: birthStr,
     age,
     gender: genderDigit % 2 === 1 ? "男" : "女",
-    zodiac: getZodiac(year),
-    constellation: getConstellation(month, day),
   };
 }
 
@@ -575,12 +550,12 @@ async function copyText(text: string, key: string) {
 }
 
 const csvText = computed(() => {
-  const header = "身份证号,有效性,省,市,出生日期,年龄,性别,生肖,星座";
+  const header = "身份证号,有效性,省,市,出生日期,年龄,性别";
   const lines = rows.value
     .filter((r) => r.raw)
     .map((r) => {
-      if (!r.valid) return `${r.raw},错误: ${r.errMsg},,,,,,,`;
-      return [r.raw, "有效", r.province, r.city === "—" ? "" : r.city, r.birth, r.age, r.gender, r.zodiac, r.constellation].join(",");
+      if (!r.valid) return `${r.raw},错误: ${r.errMsg},,,,,`;
+      return [r.raw, "有效", r.province, r.city === "—" ? "" : r.city, r.birth, r.age, r.gender].join(",");
     });
   return [header, ...lines].join("\n");
 });
@@ -596,7 +571,7 @@ async function copyCsv() {
     <div class="tool-section">
       <h2>🆔 身份证解析</h2>
       <p class="description">
-        每行一个身份证号，支持 18 位（校验位）和 15 位旧版格式；自动校验、解析地区 / 出生日期 / 性别 / 年龄 / 生肖 / 星座。
+        每行一个身份证号，支持 18 位（校验位）和 15 位旧版格式；自动校验、解析地区 / 出生日期 / 性别 / 年龄。
       </p>
 
       <div class="input-actions">
@@ -638,8 +613,6 @@ async function copyCsv() {
               <th>出生日期</th>
               <th>年龄</th>
               <th>性别</th>
-              <th>生肖</th>
-              <th>星座</th>
               <th>状态</th>
             </tr>
           </thead>
@@ -650,8 +623,6 @@ async function copyCsv() {
               <td>{{ r.valid ? r.birth : "—" }}</td>
               <td>{{ r.valid ? r.age : "—" }}</td>
               <td>{{ r.valid ? r.gender : "—" }}</td>
-              <td>{{ r.valid ? r.zodiac : "—" }}</td>
-              <td>{{ r.valid ? r.constellation : "—" }}</td>
               <td>
                 <span v-if="r.valid" class="badge badge-ok">有效</span>
                 <span v-else class="badge badge-err" :title="r.errMsg">无效</span>
