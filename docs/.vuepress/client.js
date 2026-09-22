@@ -12,6 +12,7 @@ import IPLookupComponent from "./theme/components/ip-lookup/IPLookup.vue";
 import CryptoToolComponent from "./theme/components/crypto-tool/CryptoTool.vue";
 import TimeToolComponent from "./theme/components/time-tool/TimeTool.vue";
 import BpmToolComponent from "./theme/components/bpm-tool/BpmTool.vue";
+import IdCardParserComponent from "./theme/components/idcard-parser/IdCardParser.vue";
 
 // import './theme/styles/custom.css'
 
@@ -31,5 +32,6 @@ export default defineClientConfig({
     app.component("CryptoToolComponent", CryptoToolComponent);
     app.component("TimeToolComponent", TimeToolComponent);
     app.component("BpmToolComponent", BpmToolComponent);
+    app.component("IdCardParserComponent", IdCardParserComponent);
   },
 });
