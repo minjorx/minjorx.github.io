@@ -108,7 +108,7 @@ function buildInstancedMesh(scene: THREE.Scene, n: number) {
     ghostMeshOut = null
   }
 
-  const geometry = new THREE.BoxGeometry(0.96, 0.96, 0.96)
+  const geometry = new THREE.BoxGeometry(1, 1, 1)
   const material = new THREE.MeshLambertMaterial({ vertexColors: false })
   instancedMesh = new THREE.InstancedMesh(geometry, material, n * n * n)
   instancedMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage)
@@ -224,7 +224,7 @@ function buildAxes(scene: THREE.Scene, n: number) {
 
 function buildIndicator(scene: THREE.Scene, n: number) {
   if (indicatorMesh) return
-  const geometry = new THREE.EdgesGeometry(new THREE.BoxGeometry(0.96, 0.96, 0.96))
+  const geometry = new THREE.EdgesGeometry(new THREE.BoxGeometry(1, 1, 1))
   indicatorMesh = new THREE.LineSegments(
     geometry,
     new THREE.LineBasicMaterial({ color: 0x5086a1 }),  // brand-1
