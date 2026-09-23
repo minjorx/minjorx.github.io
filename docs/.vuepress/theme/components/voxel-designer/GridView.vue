@@ -116,7 +116,9 @@ function buildFaceMeshes(scene: THREE.Scene, n: number) {
   // 6 个面共享一个 PlaneGeometry(1,1)，normal=+Z
   // 每个 instance 通过 quaternion.setFromUnitVectors(+Z, faceNormal) 旋转到对应方向
   const faceGeometry = new THREE.PlaneGeometry(1, 1)
-  const material = new THREE.MeshLambertMaterial({ vertexColors: false })
+  // DoubleSide：让所有渲染的面从两侧可见，避免从某些角度看到"空"的体素
+  // （比如大块中间体素，或边界体素从背面看）
+  const material = new THREE.MeshLambertMaterial({ vertexColors: false, side: THREE.DoubleSide })
   const maxInstances = n * n * n  // 最坏情况
 
   for (let i = 0; i < 6; i++) {
