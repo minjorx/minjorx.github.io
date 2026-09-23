@@ -53,7 +53,7 @@ let instanceIdToCoord: Vec3[] = []
 const raycaster = new THREE.Raycaster()
 const mouse = new THREE.Vector2()
 
-// 拖动状态（仅 RMB 擦除用）
+// 拖动状态（已废弃；保留以避免编译错误）
 let isDragging = false
 let dragMode: 'paint' | 'erase' | null = null
 const dragPainted = new Set<number>()
@@ -179,12 +179,25 @@ function buildGridLines(scene: THREE.Scene, n: number) {
     ;(gridLines.material as THREE.Material).dispose()
   }
   const positions: number[] = []
+  // 6 个面，每个面 2*(N+1) 条线段
   for (let i = 0; i <= n; i++) {
-    positions.push(0, 0, i, n, 0, i)
-    positions.push(0, i, 0, n, i, 0)
+    // -X 面 (x=0)
     positions.push(0, i, 0, 0, i, n)
     positions.push(0, 0, i, 0, n, i)
+    // +X 面 (x=n)
+    positions.push(n, i, 0, n, i, n)
+    positions.push(n, 0, i, n, n, i)
+    // -Y 面 (y=0)
+    positions.push(0, 0, i, n, 0, i)
+    positions.push(i, 0, 0, i, 0, n)
+    // +Y 面 (y=n)
+    positions.push(0, n, i, n, n, i)
+    positions.push(i, n, 0, i, n, n)
+    // -Z 面 (z=0)
+    positions.push(0, i, 0, n, i, 0)
     positions.push(i, 0, 0, i, n, 0)
+    // +Z 面 (z=n)
+    positions.push(0, i, n, n, i, n)
     positions.push(i, 0, n, i, n, n)
   }
   const geometry = new THREE.BufferGeometry()
@@ -227,8 +240,8 @@ function buildFaceHighlight(scene: THREE.Scene, n: number) {
     faceHighlight.geometry.dispose()
     ;(faceHighlight.material as THREE.Material).dispose()
   }
-  // 单个 PlaneGeometry 复用，按 face 旋转/平移
-  const geometry = new THREE.PlaneGeometry(n, n)
+  // 基准 1×1 plane，按需 scale
+  const geometry = new THREE.PlaneGeometry(1, 1)
   const material = new THREE.MeshBasicMaterial({
     color: 0x5086a1,
     transparent: true,
@@ -247,33 +260,47 @@ function updateFaceHighlight(focus: InteractionFocus, n: number) {
     faceHighlight.visible = false
     return
   }
-  // 把 PlaneGeometry 默认在 XY 平面上（normal=+Z）
-  // 我们要把它转到目标轴上
   const f = focus.face
-  faceHighlight.visible = true
-  faceHighlight.rotation.set(0, 0, 0)
-  faceHighlight.scale.set(1, 1, 1)
+  let cx: number, cy: number, cz: number, scale: number
 
-  // 设置旋转 + 位置，使面片覆盖在 [0,n]×[0,n] 的目标面上
-  const offset = 0.01  // 略向外偏移，避免 z-fighting
-  if (f.axis === 'x') {
-    // 面 = YZ 平面，绕 Y 旋转 90°
-    faceHighlight.rotation.y = f.sign > 0 ? Math.PI / 2 : -Math.PI / 2
-    faceHighlight.position.set(f.position + offset * f.sign, n / 2, n / 2)
-  } else if (f.axis === 'y') {
-    // 面 = XZ 平面，绕 X 旋转 90°
-    faceHighlight.rotation.x = f.sign > 0 ? -Math.PI / 2 : Math.PI / 2
-    faceHighlight.position.set(n / 2, f.position + offset * f.sign, n / 2)
+  if (focus.type === 'voxel' && focus.coord) {
+    // 体素面：1×1 在 voxel 的某一侧边界上
+    const v = focus.coord
+    cx = (f.axis === 'x' ? v.x + f.sign : v.x + 0.5)
+    cy = (f.axis === 'y' ? v.y + f.sign : v.y + 0.5)
+    cz = (f.axis === 'z' ? v.z + f.sign : v.z + 0.5)
+    scale = 1
   } else {
-    // 面 = XY 平面，绕 Y 旋转 0 或 180°
-    faceHighlight.rotation.y = f.sign > 0 ? 0 : Math.PI
-    faceHighlight.position.set(n / 2, n / 2, f.position + offset * f.sign)
+    // 空间面：N×N 在 0 或 N
+    cx = (f.axis === 'x' ? f.position : n / 2)
+    cy = (f.axis === 'y' ? f.position : n / 2)
+    cz = (f.axis === 'z' ? f.position : n / 2)
+    scale = n
   }
 
-  // 颜色：valid 用主色，invalid 用红
+  faceHighlight.visible = true
+  faceHighlight.position.set(cx, cy, cz)
+  faceHighlight.scale.set(scale, scale, 1)
+
+  // 旋转：让默认 XY 平面（normal=+Z）朝向目标面
+  if (f.axis === 'x') {
+    faceHighlight.rotation.y = f.sign > 0 ? Math.PI / 2 : -Math.PI / 2
+  } else if (f.axis === 'y') {
+    faceHighlight.rotation.x = f.sign > 0 ? -Math.PI / 2 : Math.PI / 2
+  } else {
+    faceHighlight.rotation.y = f.sign > 0 ? 0 : Math.PI
+  }
+
+  // 略向外偏移避免 z-fighting
+  const eps = 0.01
+  if (f.axis === 'x') faceHighlight.position.x += eps * f.sign
+  else if (f.axis === 'y') faceHighlight.position.y += eps * f.sign
+  else faceHighlight.position.z += eps * f.sign
+
+  // 颜色
   const mat = faceHighlight.material as THREE.MeshBasicMaterial
   mat.color.setHex(focus.valid ? 0x5086a1 : 0xf44336)
-  mat.opacity = focus.valid ? 0.18 : 0.22
+  mat.opacity = focus.valid ? 0.25 : 0.30
 }
 
 // ============ 核心：计算交互焦点 ============
@@ -474,18 +501,6 @@ function handlePointerMove(e: PointerEvent) {
     hoverInfoRef.value = null
     emit('hover', null)
   }
-
-  // RMB 拖动擦除
-  if (isDragging && dragMode === 'erase') {
-    if (currentFocus.type !== 'voxel' || !currentFocus.coord) return
-    const coord = currentFocus.coord
-    if (props.grid.get(coord.x, coord.y, coord.z) === 0) return
-    const idx = props.grid.toIdx(coord.x, coord.y, coord.z)
-    if (!dragPainted.has(idx)) {
-      dragPainted.add(idx)
-      emit('erase-at', coord)
-    }
-  }
 }
 
 function handlePointerDown(e: PointerEvent) {
@@ -497,31 +512,10 @@ function handlePointerDown(e: PointerEvent) {
     return
   }
 
-  // RMB：擦除
-  if (e.button === 2) {
-    const ndc = getMouseNDC(e as any)
-    mouse.copy(ndc)
-    raycaster.setFromCamera(mouse, ctx.camera)
-    const focus = computeInteractionFocus()
-    currentFocus = focus
-    if (focus.type === 'voxel' && focus.coord) {
-      const v = props.grid.get(focus.coord.x, focus.coord.y, focus.coord.z)
-      if (v !== 0) {
-        isDragging = true
-        dragMode = 'erase'
-        dragPainted.clear()
-        const idx = props.grid.toIdx(focus.coord.x, focus.coord.y, focus.coord.z)
-        dragPainted.add(idx)
-        emit('erase-at', focus.coord)
-      }
-    }
-    return
-  }
-
-  // MMB：OrbitControls 处理平移，无需操作
+  // MMB / RMB：OrbitControls 处理平移，无需操作
 }
 
-/** LMB 点击：基于当前 mode 触发动作（paint / fill / eyedrop） */
+/** LMB 点击：基于当前 mode 触发动作（paint / fill / eyedrop / erase） */
 function handleLmbClick(e: PointerEvent) {
   if (!ctx || !canvasRef.value) return
   const ndc = getMouseNDC(e as any)
@@ -548,6 +542,11 @@ function handleLmbClick(e: PointerEvent) {
       emit('eyedrop-at', focus.coord)
     } else if (focus.type === 'space' && focus.target) {
       emit('eyedrop-at', focus.target)
+    }
+  } else if (props.mode === 'erase') {
+    if (focus.type === 'voxel' && focus.coord) {
+      const v = props.grid.get(focus.coord.x, focus.coord.y, focus.coord.z)
+      if (v !== 0) emit('erase-at', focus.coord)
     }
   }
 }

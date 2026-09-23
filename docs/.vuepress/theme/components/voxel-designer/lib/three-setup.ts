@@ -52,7 +52,7 @@ export async function createThreeScene(canvas: HTMLCanvasElement, n: number): Pr
   controls.mouseButtons = {
     LEFT: THREE.MOUSE.ROTATE,
     MIDDLE: THREE.MOUSE.PAN,
-    RIGHT: null as any,   // 自定义处理：擦除
+    RIGHT: THREE.MOUSE.PAN,
   }
   // Shift + 左键 = 旋转
   // 注：这里通过自定义 keydown 处理 Shift 修饰

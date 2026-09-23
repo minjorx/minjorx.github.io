@@ -8,7 +8,7 @@
 
 import { packRGBA, unpackVoxel } from './color-quantize'
 
-export type NValue = 16 | 32 | 64
+export type NValue = 8 | 16 | 32 | 64
 
 export interface Vec3 {
   x: number

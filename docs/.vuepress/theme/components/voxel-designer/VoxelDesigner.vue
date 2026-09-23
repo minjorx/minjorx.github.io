@@ -37,7 +37,6 @@ const replaceFromColor = ref<number | null>(null)
 
 const showExportModal = ref(false)
 const showReplaceModal = ref(false)
-const showWelcome = ref(true)
 const exportName = ref('')
 const exportDescription = ref('')
 
@@ -496,42 +495,35 @@ function newProject() {
   bumpGrid()
   undoStack.clear()
   refreshUndoState()
-  showWelcome.value = false
   toastRef.value?.success('已新建项目')
   scheduleSave()
 }
 
 function loadDemo() {
   const demo = new VoxelGrid(32)
-  // 一个简单的小屋 + 树 demo
-  // 房子主体（4x3x4 立方体）
   for (let x = 4; x < 8; x++) for (let y = 0; y < 3; y++) for (let z = 4; z < 8; z++) {
     if (x === 4 || x === 7 || y === 0 || z === 4 || z === 7) {
-      demo.data[demo.toIdx(x, y, z)] = 0xdddd  // 灰色墙
+      demo.data[demo.toIdx(x, y, z)] = 0xdddd
     }
   }
-  // 屋顶（金字塔）
   for (let i = 0; i < 3; i++) {
     for (let x = 4 - i; x < 8 + i; x++) for (let z = 4 - i; z < 8 + i; z++) {
-      if (x >= 4 && x < 8 && z >= 4 && z < 8) continue  // 跳过内部
-      demo.data[demo.toIdx(x, 3 + i, z)] = 0xe944  // 红屋顶
+      if (x >= 4 && x < 8 && z >= 4 && z < 8) continue
+      demo.data[demo.toIdx(x, 3 + i, z)] = 0xe944
     }
   }
-  // 门
   demo.data[demo.toIdx(6, 1, 4)] = 0
   demo.data[demo.toIdx(6, 2, 4)] = 0
-  // 树（树干 + 树冠）
-  for (let y = 0; y < 4; y++) demo.data[demo.toIdx(14, y, 14)] = 0xa552  // 树干
+  for (let y = 0; y < 4; y++) demo.data[demo.toIdx(14, y, 14)] = 0xa552
   for (let dx = -2; dx <= 2; dx++) for (let dz = -2; dz <= 2; dz++) for (let dy = 4; dy < 8; dy++) {
     if (dx * dx + dz * dz + dy * dy < 8) {
-      demo.data[demo.toIdx(14 + dx, dy, 14 + dz)] = 0x4a4a  // 绿色
+      demo.data[demo.toIdx(14 + dx, dy, 14 + dz)] = 0x4a4a
     }
   }
   grid.value = demo
   bumpGrid()
   undoStack.clear()
   refreshUndoState()
-  showWelcome.value = false
   toastRef.value?.success('已加载示例')
   scheduleSave()
 }
@@ -594,7 +586,7 @@ function onKeyDown(e: KeyboardEvent) {
       toastRef.value?.info(mode.value === 'fill' ? '填充模式：点击体素' : '已切换到涂色模式')
     }
     else if (e.key === 'b' || e.key === 'B') { e.preventDefault(); mode.value = 'paint' }
-    else if (e.key === 'Escape') { showClearModal.value = false; showExportModal.value = false; showReplaceModal.value = false; showWelcome.value = false }
+    else if (e.key === 'Escape') { showClearModal.value = false; showExportModal.value = false; showReplaceModal.value = false }
     else if (e.key === ' ') {
       // Space 强制放置（在 GridView 中处理）
     }
@@ -710,7 +702,7 @@ defineExpose({
           <h3>空间</h3>
           <div class="n-selector">
             <button
-              v-for="n in [16, 32, 64] as NValue[]"
+              v-for="n in [8, 16, 32, 64] as NValue[]"
               :key="n"
               class="n-btn"
               :class="{ selected: gridN === n }"
@@ -807,14 +799,6 @@ defineExpose({
     </footer>
 
     <!-- 弹窗 -->
-    <Modal :visible="showWelcome" title="欢迎使用体素设计器" @close="showWelcome = false">
-      <p>选择如何开始：</p>
-      <div class="welcome-actions">
-        <button class="btn-full primary" @click="newProject(); showWelcome = false">✏️ 新建项目</button>
-        <button class="btn-full" @click="loadDemo(); showWelcome = false">📦 加载示例</button>
-      </div>
-    </Modal>
-
     <Modal :visible="showExportModal" title="导出为预制模型" @close="showExportModal = false">
       <div class="form-row">
         <label>名称*</label>
