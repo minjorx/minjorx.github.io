@@ -121,7 +121,10 @@ export function getAllSpaceFaces(n: number): Face[] {
 }
 
 /**
- * 通用：ray 与给定 plane 相交，返回该平面上的整数坐标 + t（不 clamp）
+ * 通用：ray 与给定 plane 相交，返回该平面上的整数坐标 + t
+ *
+ * 注意：空间边界面在 +X/+Y/+Z 时 position = N，但合法 voxel 坐标是 [0, N-1]；
+ *       所以 +方向的面 target 在面轴上的坐标 = position - 1（最后一个有效 cell）。
  */
 export function raycastPlane(
   rayOrigin: Vec3,
@@ -136,10 +139,14 @@ export function raycastPlane(
   const hx = rayOrigin.x + rayDir.x * t
   const hy = rayOrigin.y + rayDir.y * t
   const hz = rayOrigin.z + rayDir.z * t
+
+  // 面轴上的坐标：+方向用 position-1（合法上限 N-1），-方向用 position（合法下限 0）
+  const axisCoord = plane.sign > 0 ? plane.position - 1 : plane.position
+
   let target: Vec3
-  if (plane.axis === 'x') target = { x: plane.position, y: Math.floor(hy), z: Math.floor(hz) }
-  else if (plane.axis === 'y') target = { x: Math.floor(hx), y: plane.position, z: Math.floor(hz) }
-  else target = { x: Math.floor(hx), y: Math.floor(hy), z: plane.position }
+  if (plane.axis === 'x') target = { x: axisCoord, y: Math.floor(hy), z: Math.floor(hz) }
+  else if (plane.axis === 'y') target = { x: Math.floor(hx), y: axisCoord, z: Math.floor(hz) }
+  else target = { x: Math.floor(hx), y: Math.floor(hy), z: axisCoord }
   return { target, t }
 }
 
