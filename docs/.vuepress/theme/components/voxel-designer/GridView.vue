@@ -57,6 +57,13 @@ let faceHighlight: THREE.Mesh | null = null
 const raycaster = new THREE.Raycaster()
 const mouse = new THREE.Vector2()
 
+// Debug 可视化（按 D 切换）
+const debugEnabled = ref(false)
+let debugRay: THREE.Line | null = null
+let debugHit: THREE.Mesh | null = null
+let debugVoxelAABB: THREE.LineSegments | null = null
+const DEBUG_FAR = 200  // 射线延伸距离
+
 // 拖动状态（已废弃；保留以避免编译错误）
 let isDragging = false
 let dragMode: 'paint' | 'erase' | null = null
@@ -446,6 +453,81 @@ function updateFaceHighlight(focus: InteractionFocus, n: number) {
   mat.opacity = focus.valid ? 0.35 : 0.40
 }
 
+// ============ Debug 可视化 ============
+
+function buildDebug(scene: THREE.Scene) {
+  // 清理旧
+  if (debugRay) { scene.remove(debugRay); debugRay.geometry.dispose(); debugRay = null }
+  if (debugHit) { scene.remove(debugHit); debugHit.geometry.dispose(); debugHit = null }
+  if (debugVoxelAABB) { scene.remove(debugVoxelAABB); debugVoxelAABB.geometry.dispose(); debugVoxelAABB = null }
+
+  // 射线（红线）
+  const rayGeo = new THREE.BufferGeometry()
+  rayGeo.setAttribute('position', new THREE.Float32BufferAttribute([
+    0, 0, 0,  0, 0, 0,
+  ], 3))
+  const rayMat = new THREE.LineBasicMaterial({ color: 0xff0000, transparent: true, opacity: 0.8 })
+  debugRay = new THREE.Line(rayGeo, rayMat)
+  debugRay.visible = false
+  scene.add(debugRay)
+
+  // 命中点（绿球）
+  const hitGeo = new THREE.SphereGeometry(0.1, 8, 8)
+  const hitMat = new THREE.MeshBasicMaterial({ color: 0x00ff00, transparent: true, opacity: 0.8 })
+  debugHit = new THREE.Mesh(hitGeo, hitMat)
+  debugHit.visible = false
+  scene.add(debugHit)
+
+  // 命中的体素 AABB 框（蓝线框）
+  const boxGeo = new THREE.BoxGeometry(1, 1, 1)
+  const edgesGeo = new THREE.EdgesGeometry(boxGeo)
+  boxGeo.dispose()
+  const boxMat = new THREE.LineBasicMaterial({ color: 0x0088ff, transparent: true, opacity: 0.7 })
+  debugVoxelAABB = new THREE.LineSegments(edgesGeo, boxMat)
+  debugVoxelAABB.visible = false
+  scene.add(debugVoxelAABB)
+}
+
+function updateDebug(focus: InteractionFocus, hitPoint: Vec3 | null, hitVoxel: Vec3 | null) {
+  if (!debugRay || !debugHit || !debugVoxelAABB) return
+  if (!debugEnabled.value) {
+    debugRay.visible = false
+    debugHit.visible = false
+    debugVoxelAABB.visible = false
+    return
+  }
+
+  // 更新射线（从鼠标到 far）
+  const o = raycaster.ray.origin
+  const d = raycaster.ray.direction
+  const farPoint = {
+    x: o.x + d.x * DEBUG_FAR,
+    y: o.y + d.y * DEBUG_FAR,
+    z: o.z + d.z * DEBUG_FAR,
+  }
+  const positions = (debugRay.geometry.attributes.position.array as Float32Array)
+  positions[0] = o.x; positions[1] = o.y; positions[2] = o.z
+  positions[3] = farPoint.x; positions[4] = farPoint.y; positions[5] = farPoint.z
+  debugRay.geometry.attributes.position.needsUpdate = true
+  debugRay.visible = true
+
+  // 命中点
+  if (hitPoint) {
+    debugHit.position.set(hitPoint.x + 0.5, hitPoint.y + 0.5, hitPoint.z + 0.5)
+    debugHit.visible = true
+  } else {
+    debugHit.visible = false
+  }
+
+  // 命中的体素 AABB
+  if (hitVoxel) {
+    debugVoxelAABB.position.set(hitVoxel.x + 0.5, hitVoxel.y + 0.5, hitVoxel.z + 0.5)
+    debugVoxelAABB.visible = true
+  } else {
+    debugVoxelAABB.visible = false
+  }
+}
+
 // 复用的临时向量（必须在使用前声明）
 const _tmpVec3a = new THREE.Vector3()
 const _tmpVec3b = new THREE.Vector3()
@@ -733,6 +815,13 @@ function handlePointerMove(e: PointerEvent) {
   currentFocus = computeInteractionFocus()
   updateGhostAndHighlight(currentFocus)
 
+  // Debug 可视化
+  updateDebug(
+    currentFocus,
+    currentFocus.type === 'voxel' ? currentFocus.coord : currentFocus.target,
+    currentFocus.type === 'voxel' ? currentFocus.coord : null,
+  )
+
   // hover info
   if (currentFocus.type !== 'none' && currentFocus.target) {
     const v = currentFocus.type === 'voxel' && currentFocus.coord
@@ -936,6 +1025,7 @@ onMounted(async () => {
   buildAxes(ctx.scene, props.grid.n)
   buildIndicator(ctx.scene, props.grid.n)
   buildFaceHighlight(ctx.scene, props.grid.n)
+  buildDebug(ctx.scene)
   updateFaceMeshes(props.grid)
   updateInteriorWireframe(props.grid)
 
@@ -961,6 +1051,11 @@ onBeforeUnmount(() => {
   canvas.removeEventListener('pointerleave', handlePointerLeave)
   window.removeEventListener('resize', handleResize)
   ctx.dispose()
+})
+
+defineExpose({
+  toggleDebug: () => { debugEnabled.value = !debugEnabled.value },
+  isDebugEnabled: () => debugEnabled.value,
 })
 </script>
 

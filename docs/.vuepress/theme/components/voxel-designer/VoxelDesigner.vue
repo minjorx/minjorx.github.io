@@ -41,6 +41,7 @@ const exportName = ref('')
 const exportDescription = ref('')
 
 const toastRef = ref<InstanceType<typeof Toast> | null>(null)
+const gridViewRef = ref<InstanceType<typeof GridView> | null>(null)
 const isDark = ref(false)
 
 // ---------- 派生 ----------
@@ -546,6 +547,14 @@ function onKeyDown(e: KeyboardEvent) {
   const ctrl = e.ctrlKey || e.metaKey
   const shift = e.shiftKey
 
+  // D：切换 debug 可视化（开发时用）
+  if (!ctrl && !shift && (e.key === 'd' || e.key === 'D')) {
+    e.preventDefault()
+    gridViewRef.value?.toggleDebug?.()
+    toastRef.value?.info(gridViewRef.value?.isDebugEnabled?.() ? 'Debug 已开启' : 'Debug 已关闭')
+    return
+  }
+
   // Ctrl+Z 撤销
   if (ctrl && !shift && e.key.toLowerCase() === 'z') {
     e.preventDefault()
@@ -678,6 +687,7 @@ defineExpose({
       <!-- 画布 -->
       <div class="canvas-area">
         <GridView
+          ref="gridViewRef"
           :grid="grid"
           :grid-version="gridVersion"
           :current-color="currentColor"
