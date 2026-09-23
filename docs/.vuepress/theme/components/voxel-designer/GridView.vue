@@ -10,6 +10,7 @@ import type { Template } from './lib/templates'
 
 const props = defineProps<{
   grid: VoxelGrid
+  gridVersion: number
   currentColor: number
   template: Template | null
   templateParams: Record<string, number>
@@ -24,6 +25,7 @@ const emit = defineEmits<{
   (e: 'erase-at', coord: Vec3): void
   (e: 'fill-at', coord: Vec3): void
   (e: 'eyedrop-at', coord: Vec3): void
+  (e: 'place-template', coord: Vec3): void
   (e: 'hover', coord: Vec3 | null): void
 }>()
 
@@ -37,6 +39,7 @@ let ghostMeshIn: THREE.InstancedMesh | null = null
 let ghostMeshOut: THREE.InstancedMesh | null = null
 let indicatorMesh: THREE.LineSegments | null = null
 let boxHelper: THREE.LineSegments | null = null
+let gridLines: THREE.LineSegments | null = null
 let axesGroup: THREE.Group | null = null
 let isDragging = false
 let dragMode: 'paint' | 'erase' | null = null
@@ -147,6 +150,43 @@ function buildBoxHelper(scene: THREE.Scene, n: number) {
   boxHelper.position.set(n / 2, n / 2, n / 2)
   scene.add(boxHelper)
   geometry.dispose()
+}
+
+/** N×N×N 内部网格线（每个轴向有 N+1 条线） */
+function buildGridLines(scene: THREE.Scene, n: number) {
+  if (gridLines) {
+    scene.remove(gridLines)
+    gridLines.geometry.dispose()
+    ;(gridLines.material as THREE.Material).dispose()
+  }
+  const positions: number[] = []
+  // X-Y 平面（垂直于 Z 轴）：每个 z 画两条线
+  for (let i = 0; i <= n; i++) {
+    positions.push(0, 0, i, n, 0, i)        // X 方向
+    positions.push(0, i, 0, n, i, 0)        // Y 方向
+  }
+  // X-Z 平面（垂直于 Y 轴）
+  for (let i = 0; i <= n; i++) {
+    positions.push(0, i, 0, 0, i, n)        // X 方向
+    positions.push(0, 0, i, 0, n, i)        // Z 方向
+  }
+  // Y-Z 平面（垂直于 X 轴）
+  for (let i = 0; i <= n; i++) {
+    positions.push(i, 0, 0, i, n, 0)        // Y 方向
+    positions.push(i, 0, n, i, n, n)        // Z 方向
+  }
+  const geometry = new THREE.BufferGeometry()
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
+  gridLines = new THREE.LineSegments(
+    geometry,
+    new THREE.LineBasicMaterial({
+      color: props.isDark ? 0x666666 : 0xaaaaaa,
+      transparent: true,
+      opacity: 0.18,
+      depthWrite: false,
+    }),
+  )
+  scene.add(gridLines)
 }
 
 function buildAxes(scene: THREE.Scene, n: number) {
@@ -326,7 +366,8 @@ let snapResult: { coord: Vec3; source: string; valid: boolean } | null = null
 
 function handlePointerMove(e: PointerEvent) {
   if (!ctx || !canvasRef.value) return
-  mouse.set(...getMouseNDC(e as any))
+  const ndc = getMouseNDC(e as any)
+  mouse.copy(ndc)
   raycaster.setFromCamera(mouse, ctx.camera)
   snapResult = snapFromRay(raycaster, props.grid)
   updateGhostAndIndicator(snapResult)
@@ -356,12 +397,19 @@ function handlePointerDown(e: PointerEvent) {
   if (!ctx || !canvasRef.value) return
   // 鼠标右键或中键 → OrbitControls 处理
   if (e.button !== 0) return
-  mouse.set(...getMouseNDC(e as any))
+  const ndc = getMouseNDC(e as any)
+  mouse.copy(ndc)
   raycaster.setFromCamera(mouse, ctx.camera)
   const r = snapFromRay(raycaster, props.grid)
   if (!r) return
 
   if (props.mode === 'paint') {
+    // 模板选中时 → 放置模板（单击，不拖动）
+    if (props.template && props.template.id !== 'pixel') {
+      if (r.valid) emit('place-template', r.coord)
+      return
+    }
+    // 单体素涂色（可拖动）
     isDragging = true
     dragMode = 'paint'
     dragPainted.clear()
@@ -416,11 +464,11 @@ function handleResize() {
 }
 
 // 监听外部传入的 grid 变化
-watch(() => props.grid, () => {
+watch(() => props.gridVersion, () => {
   if (ctx && instancedMesh) {
     updateInstancedFromGrid(props.grid)
   }
-}, { deep: true })
+})
 
 watch(() => props.isDark, () => {
   if (ctx) {
@@ -429,12 +477,16 @@ watch(() => props.isDark, () => {
   if (boxHelper) {
     ;(boxHelper.material as THREE.LineBasicMaterial).color.set(props.isDark ? 0x888888 : 0x666666)
   }
+  if (gridLines) {
+    ;(gridLines.material as THREE.LineBasicMaterial).color.set(props.isDark ? 0x666666 : 0xaaaaaa)
+  }
 })
 
 watch(() => props.grid.n, () => {
   if (ctx) {
     buildInstancedMesh(ctx.scene, props.grid.n)
     buildBoxHelper(ctx.scene, props.grid.n)
+    buildGridLines(ctx.scene, props.grid.n)
     buildAxes(ctx.scene, props.grid.n)
     buildIndicator(ctx.scene, props.grid.n)
     threeN = props.grid.n
@@ -467,6 +519,7 @@ onMounted(async () => {
   ctx = await createThreeScene(canvasRef.value, props.grid.n)
   buildInstancedMesh(ctx.scene, props.grid.n)
   buildBoxHelper(ctx.scene, props.grid.n)
+  buildGridLines(ctx.scene, props.grid.n)
   buildAxes(ctx.scene, props.grid.n)
   buildIndicator(ctx.scene, props.grid.n)
   updateInstancedFromGrid(props.grid)

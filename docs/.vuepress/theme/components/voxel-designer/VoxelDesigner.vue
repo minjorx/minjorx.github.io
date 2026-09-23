@@ -20,6 +20,7 @@ import type { PrefabFile } from './lib/prefab'
 
 // ---------- 状态 ----------
 const grid = ref<VoxelGrid>(new VoxelGrid(32))
+const gridVersion = ref(0)  // 每次数据变更 +1，用于触发响应
 const undoStack = new UndoStack()
 const undoState = reactive({ canUndo: false, canRedo: false })
 const currentColor = ref(DEFAULT_PALETTE_VALUE)
@@ -89,11 +90,16 @@ function applyPaintAt(coord: Vec3) {
 
   // 应用
   for (const p of patches) grid.value.data[p.idx] = p.to
+  bumpGrid()
 
   const op = makePaintOp('paint', patches, grid.value, `涂 1 格`)
   undoStack.push(op)
   refreshUndoState()
   scheduleSave()
+}
+
+function bumpGrid() {
+  gridVersion.value++
 }
 
 function applyEraseAt(coord: Vec3) {
@@ -123,6 +129,7 @@ function applyEraseAt(coord: Vec3) {
   }
 
   for (const p of patches) grid.value.data[p.idx] = p.to
+  bumpGrid()
 
   const op = makePaintOp('erase', patches, grid.value, `擦 1 格`)
   undoStack.push(op)
@@ -137,6 +144,7 @@ function applyFillAt(coord: Vec3) {
     return
   }
   for (const p of patches) grid.value.data[p.idx] = p.to
+  bumpGrid()
   const op = makePaintOp('paint-many', patches, grid.value, `填充 ${patches.length} 格`)
   undoStack.push(op)
   refreshUndoState()
@@ -152,6 +160,14 @@ function applyEyedropAt(coord: Vec3) {
   currentColor.value = v
   toastRef.value?.info('已取色')
   mode.value = 'paint'  // 自动切回涂色模式
+}
+
+function onPlaceTemplate(coord: Vec3) {
+  if (currentTemplate.value) {
+    applyPaintTemplate(currentTemplate.value, currentParams.value, coord)
+  } else {
+    applyPaintAt(coord)
+  }
 }
 
 function applyPaintTemplate(template: Template, params: Record<string, number>, anchor: Vec3) {
@@ -226,6 +242,7 @@ function mirrorAll(axis: 'x' | 'y' | 'z') {
   if (axis === 'x') grid.value.mirrorX()
   else if (axis === 'y') grid.value.mirrorY()
   else grid.value.mirrorZ()
+  bumpGrid()
 
   // 生成 patches（用于 undo）：每个变化的体素
   const patches: Patch[] = []
@@ -256,6 +273,7 @@ function centerModel() {
   const before = new Uint16Array(grid.value.data)
   const beforeHash = grid.value.hash()
   grid.value.centerOnOrigin()
+  bumpGrid()
 
   const patches: Patch[] = []
   for (let i = 0; i < grid.value.data.length; i++) {
@@ -288,6 +306,7 @@ function refreshUndoState() {
 function undo() {
   try {
     if (undoStack.undo(grid.value)) {
+      bumpGrid()
       refreshUndoState()
       scheduleSave()
     }
@@ -298,6 +317,7 @@ function undo() {
 
 function redo() {
   if (undoStack.redo(grid.value)) {
+    bumpGrid()
     refreshUndoState()
     scheduleSave()
   }
@@ -314,6 +334,7 @@ function confirmClear() {
     if (before[i] !== 0) patches.push({ idx: i, from: before[i], to: 0 })
   }
   grid.value.clear()
+  bumpGrid()
   undoStack.push({
     type: 'clear' as any,
     patches,
@@ -344,6 +365,7 @@ function confirmReplace() {
     return
   }
   for (const p of patches) grid.value.data[p.idx] = p.to
+  bumpGrid()
   const op = makePaintOp('paint-many', patches, grid.value, `替换 ${patches.length} 格`)
   undoStack.push(op)
   refreshUndoState()
@@ -453,6 +475,7 @@ function changeN(n: number) {
   }
   grid.value = newGrid
   gridN.value = n as NValue
+  bumpGrid()
   undoStack.clear()
   refreshUndoState()
   toastRef.value?.success(`已切换到 N=${n}`)
@@ -462,6 +485,7 @@ function changeN(n: number) {
 // ---------- 新建/初始化 ----------
 function newProject() {
   grid.value = new VoxelGrid(gridN.value)
+  bumpGrid()
   undoStack.clear()
   refreshUndoState()
   showWelcome.value = false
@@ -496,6 +520,7 @@ function loadDemo() {
     }
   }
   grid.value = demo
+  bumpGrid()
   undoStack.clear()
   refreshUndoState()
   showWelcome.value = false
@@ -508,6 +533,7 @@ function initFromStorage() {
   if (saved) {
     grid.value = saved.grid
     gridN.value = saved.n as NValue
+    bumpGrid()
     toastRef.value?.info('已恢复上次项目')
   }
 }
@@ -653,6 +679,7 @@ defineExpose({
       <div class="canvas-area">
         <GridView
           :grid="grid"
+          :grid-version="gridVersion"
           :current-color="currentColor"
           :template="currentTemplate"
           :template-params="currentParams"
@@ -664,6 +691,7 @@ defineExpose({
           @erase-at="applyEraseAt"
           @fill-at="applyFillAt"
           @eyedrop-at="applyEyedropAt"
+          @place-template="onPlaceTemplate"
           @hover="onGridPointerEvent"
         />
       </div>
