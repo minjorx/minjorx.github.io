@@ -16,7 +16,8 @@ config:
 - **<a href="/tools/crypto">加密工具</a>** - 常用单向哈希 & 双向 AES 加解密
 - **<a href="/tools/time">时间工具</a>** - 时间戳与日期互转
 - **<a href="/tools/bpm">BPM 工具</a>** - 跟着节拍轻点，测节奏速度与稳定性
-- **<a href="/tools/idcard-parser">身份证解析</a>** - 一行一个，校验 + 解析地区 / 出生日期 / 性别 / 年龄 / 生肖 / 星座
+- **<a href="/tools/idcard-parser">身份证解析</a>** - 一行一个，校验 + 解析地区 / 出生日期 / 性别 / 年龄
+- **<a href="/tools/voxel-designer">体素设计器</a>** - 网页版体素编辑器，搭积木、做图标、16 桶配色 / 生肖 / 星座
 
 ## 使用方法
 
