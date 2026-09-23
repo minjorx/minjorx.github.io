@@ -43,6 +43,9 @@ let faceMeshes: (THREE.InstancedMesh | null)[] = [null, null, null, null, null, 
 interface VisibleFace { voxel: Vec3; axis: 'x'|'y'|'z'; sign: 1|-1 }
 let faceData: VisibleFace[][] = [[], [], [], [], [], []]
 
+// 内部体素线框（被完全包围的体素仍可见，避免"消失"）
+let interiorWireframe: THREE.LineSegments | null = null
+
 let ghostMeshIn: THREE.InstancedMesh | null = null
 let ghostMeshOut: THREE.InstancedMesh | null = null
 let indicatorMesh: THREE.LineSegments | null = null
@@ -216,6 +219,80 @@ function updateFaceMeshes(grid: VoxelGrid) {
     mesh.instanceMatrix.needsUpdate = true
     if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true
   }
+}
+
+function buildInteriorWireframe(scene: THREE.Scene, n: number) {
+  if (interiorWireframe) {
+    scene.remove(interiorWireframe)
+    interiorWireframe.geometry.dispose()
+    ;(interiorWireframe.material as THREE.Material).dispose()
+  }
+  // 最大 N=64 的极端情况：内部体素最多 (62)³ ≈ 238K 个
+  const MAX_N = 64
+  const maxVerts = 24 * MAX_N * MAX_N * MAX_N
+  const positions = new Float32Array(maxVerts * 3)
+  const geo = new THREE.BufferGeometry()
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
+  geo.setDrawRange(0, 0)
+  const material = new THREE.LineBasicMaterial({
+    color: props.isDark ? 0x666666 : 0xbbbbbb,
+    transparent: true,
+    opacity: 0.4,
+  })
+  interiorWireframe = new THREE.LineSegments(geo, material)
+  interiorWireframe.visible = false
+  scene.add(interiorWireframe)
+}
+
+function updateInteriorWireframe(grid: VoxelGrid) {
+  if (!interiorWireframe) return
+  const n = grid.n
+  const positions = interiorWireframe.geometry.attributes.position
+    .array as Float32Array
+  let count = 0
+
+  // 单位立方体 12 条边的端点
+  const E: number[] = [
+    0, 0, 0,  1, 0, 0,
+    1, 0, 0,  1, 0, 1,
+    1, 0, 1,  0, 0, 1,
+    0, 0, 1,  0, 0, 0,
+    0, 1, 0,  1, 1, 0,
+    1, 1, 0,  1, 1, 1,
+    1, 1, 1,  0, 1, 1,
+    0, 1, 1,  0, 1, 0,
+    0, 0, 0,  0, 1, 0,
+    1, 0, 0,  1, 1, 0,
+    1, 0, 1,  1, 1, 1,
+    0, 0, 1,  0, 1, 1,
+  ]
+
+  for (let z = 0; z < n; z++) {
+    for (let y = 0; y < n; y++) {
+      for (let x = 0; x < n; x++) {
+        if (grid.data[grid.toIdx(x, y, z)] === 0) continue
+        // 内部体素 = 6 邻居都在边界内且都被占据
+        const xPlus  = x + 1 < n && grid.data[grid.toIdx(x+1, y, z)]   !== 0
+        const xMinus = x - 1 >= 0 && grid.data[grid.toIdx(x-1, y, z)]   !== 0
+        const yPlus  = y + 1 < n && grid.data[grid.toIdx(x, y+1, z)]   !== 0
+        const yMinus = y - 1 >= 0 && grid.data[grid.toIdx(x, y-1, z)]   !== 0
+        const zPlus  = z + 1 < n && grid.data[grid.toIdx(x, y, z+1)]   !== 0
+        const zMinus = z - 1 >= 0 && grid.data[grid.toIdx(x, y, z-1)]   !== 0
+        if (xPlus && xMinus && yPlus && yMinus && zPlus && zMinus) {
+          // 12 条边
+          for (let e = 0; e < E.length; e += 3) {
+            positions[count++] = E[e]     + x
+            positions[count++] = E[e + 1] + y
+            positions[count++] = E[e + 2] + z
+          }
+        }
+      }
+    }
+  }
+
+  interiorWireframe.geometry.setDrawRange(0, count)
+  interiorWireframe.geometry.attributes.position.needsUpdate = true
+  interiorWireframe.visible = count > 0
 }
 
 function buildBoxHelper(scene: THREE.Scene, n: number) {
@@ -703,6 +780,7 @@ function handleResize() {
 watch(() => props.gridVersion, () => {
   if (ctx && faceMeshes[0]) {
     updateFaceMeshes(props.grid)
+    updateInteriorWireframe(props.grid)
   }
 })
 
@@ -719,12 +797,14 @@ watch(() => props.isDark, () => {
 watch(() => props.grid.n, () => {
   if (ctx) {
     buildFaceMeshes(ctx.scene, props.grid.n)
+    buildInteriorWireframe(ctx.scene, props.grid.n)
     buildBoxHelper(ctx.scene, props.grid.n)
     buildGridLines(ctx.scene, props.grid.n)
     buildAxes(ctx.scene, props.grid.n)
     buildIndicator(ctx.scene, props.grid.n)
     buildFaceHighlight(ctx.scene, props.grid.n)
     updateFaceMeshes(props.grid)
+    updateInteriorWireframe(props.grid)
   }
 })
 
@@ -757,12 +837,14 @@ onMounted(async () => {
   if (!canvasRef.value) return
   ctx = await createThreeScene(canvasRef.value, props.grid.n)
   buildFaceMeshes(ctx.scene, props.grid.n)
+  buildInteriorWireframe(ctx.scene, props.grid.n)
   buildBoxHelper(ctx.scene, props.grid.n)
   buildGridLines(ctx.scene, props.grid.n)
   buildAxes(ctx.scene, props.grid.n)
   buildIndicator(ctx.scene, props.grid.n)
   buildFaceHighlight(ctx.scene, props.grid.n)
   updateFaceMeshes(props.grid)
+  updateInteriorWireframe(props.grid)
 
   const canvas = canvasRef.value
   canvas.style.cursor = getCursorForMode(props.mode)
