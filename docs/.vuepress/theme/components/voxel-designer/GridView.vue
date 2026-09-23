@@ -240,17 +240,18 @@ function buildFaceHighlight(scene: THREE.Scene, n: number) {
     faceHighlight.geometry.dispose()
     ;(faceHighlight.material as THREE.Material).dispose()
   }
-  // 基准 1×1 plane，按需 scale
   const geometry = new THREE.PlaneGeometry(1, 1)
   const material = new THREE.MeshBasicMaterial({
     color: 0x5086a1,
     transparent: true,
-    opacity: 0.18,
+    opacity: 0.35,
     side: THREE.DoubleSide,
     depthWrite: false,
+    depthTest: false,  // 始终渲染在最上层
   })
   faceHighlight = new THREE.Mesh(geometry, material)
   faceHighlight.visible = false
+  faceHighlight.renderOrder = 999  // 高优先级
   scene.add(faceHighlight)
 }
 
@@ -282,14 +283,14 @@ function updateFaceHighlight(focus: InteractionFocus, n: number) {
   faceHighlight.position.set(cx, cy, cz)
   faceHighlight.scale.set(scale, scale, 1)
 
-  // 旋转：让默认 XY 平面（normal=+Z）朝向目标面
-  if (f.axis === 'x') {
-    faceHighlight.rotation.y = f.sign > 0 ? Math.PI / 2 : -Math.PI / 2
-  } else if (f.axis === 'y') {
-    faceHighlight.rotation.x = f.sign > 0 ? -Math.PI / 2 : Math.PI / 2
-  } else {
-    faceHighlight.rotation.y = f.sign > 0 ? 0 : Math.PI
-  }
+  // 用 quaternion 直接从 +Z 法线旋转到面法线，避免手算误差
+  const NORMAL_Z = _tmpVec3a.set(0, 0, 1)
+  _tmpVec3b.set(
+    f.axis === 'x' ? f.sign : 0,
+    f.axis === 'y' ? f.sign : 0,
+    f.axis === 'z' ? f.sign : 0,
+  )
+  faceHighlight.quaternion.setFromUnitVectors(NORMAL_Z, _tmpVec3b)
 
   // 略向外偏移避免 z-fighting
   const eps = 0.01
@@ -300,8 +301,12 @@ function updateFaceHighlight(focus: InteractionFocus, n: number) {
   // 颜色
   const mat = faceHighlight.material as THREE.MeshBasicMaterial
   mat.color.setHex(focus.valid ? 0x5086a1 : 0xf44336)
-  mat.opacity = focus.valid ? 0.25 : 0.30
+  mat.opacity = focus.valid ? 0.35 : 0.40
 }
+
+// 复用的临时向量（必须在使用前声明）
+const _tmpVec3a = new THREE.Vector3()
+const _tmpVec3b = new THREE.Vector3()
 
 // ============ 核心：计算交互焦点 ============
 
@@ -571,7 +576,7 @@ function handleLmbClick(e: PointerEvent) {
 function handlePointerUp(e: PointerEvent) {
   // LMB up：恢复 OrbitControls 旋转；检测是否为点击
   if (e.button === 0) {
-    if (ctx.controls) {
+    if (ctx?.controls) {
       ctx.controls.mouseButtons.LEFT = THREE.MOUSE.ROTATE
     }
     if (lmbDown) {
