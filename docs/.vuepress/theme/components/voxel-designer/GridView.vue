@@ -536,7 +536,45 @@ function computeInteractionFocus(): InteractionFocus {
   }
 
   if (bestVoxelHit) {
+    // 阶段 2（精确）：对最佳体素做 face plane 精确 raycast
+    // AABB 给出 entryFace 但不精确；这里用 1×1 面 plane 找精确命中
     const v = bestVoxelHit.voxel
+    let bestFaceHit: { dist: number; meshIdx: number; instanceId: number } | null = null
+    for (let i = 0; i < 6; i++) {
+      const m = faceMeshes[i]
+      if (!m || m.count === 0) continue
+      // 只检查属于该体素的 instance（避免其他体素干扰）
+      const hits = raycaster.intersectObject(m, false)
+      for (const hit of hits) {
+        if (hit.instanceId === undefined) continue
+        // faceData[i][instanceId] 应当属于体素 v
+        const fd = faceData[i][hit.instanceId]
+        if (!fd || fd.voxel.x !== v.x || fd.voxel.y !== v.y || fd.voxel.z !== v.z) continue
+        if (!bestFaceHit || hit.distance < bestFaceHit.dist) {
+          bestFaceHit = { dist: hit.distance, meshIdx: i, instanceId: hit.instanceId }
+        }
+      }
+    }
+    if (bestFaceHit) {
+      const f = faceData[bestFaceHit.meshIdx][bestFaceHit.instanceId]
+      const normal = faceNormal(f.axis, f.sign)
+      const target: Vec3 = {
+        x: v.x + normal.x,
+        y: v.y + normal.y,
+        z: v.z + normal.z,
+      }
+      const inBounds = props.grid.inBounds(target)
+      const occupied = inBounds && props.grid.isOccupied(target)
+      return {
+        type: 'voxel',
+        coord: v,
+        target,
+        face: { axis: f.axis, sign: f.sign, position: 0 },
+        valid: inBounds && !occupied,
+        reason: !inBounds ? 'out-of-bounds' : occupied ? 'occupied' : undefined,
+      }
+    }
+    // 精确面没命中（说明鼠标在体素内部但不在任何面上），用 AABB 入口面
     const face = bestVoxelHit.entryFace
     const normal = faceNormal(face.axis, face.sign)
     const target: Vec3 = {
