@@ -7,7 +7,7 @@ import { createThreeScene, type ThreeContext } from './lib/three-setup'
 import { mirrorCoord } from './lib/symmetry'
 import type { Template } from './lib/templates'
 import {
-  getAllSpaceFaces, raycastPlane, getVoxelFace,
+  getAllSpaceFaces, raycastPlane,
   faceNormal,
   type Face,
 } from './lib/interaction'
@@ -472,17 +472,11 @@ function computeInteractionFocus(): InteractionFocus {
   // === 阶段 1：射线穿过任何体素？===
   // 旧实现用 1×1 face planes 相交判定（太精细，鼠标稍微偏离就漏）
   // 新实现用 AABB（体素盒子）相交判定：只要 ray 穿过体素体积就算"鼠标在体素上"
-  let cameraDir: Vec3 = { x: 0, y: 0, z: 0 }
-  {
-    const cx = ctx.camera.position.x - n / 2
-    const cy = ctx.camera.position.y - n / 2
-    const cz = ctx.camera.position.z - n / 2
-    const cl = Math.sqrt(cx * cx + cy * cy + cz * cz)
-    if (cl > 0) cameraDir = { x: cx / cl, y: cy / cl, z: cz / cl }
-  }
 
   // Slab method: ray vs AABB [x, x+1]x[y, y+1]x[z, z+1]
-  let bestVoxelHit: { t: number; voxel: Vec3 } | null = null
+  // 关键：记录 ray 实际进入体素盒的面（entry face），用它做交互面
+  // 而不是用摄像机正面——对角线视角时摄像机正面会 tied，导致错选面
+  let bestVoxelHit: { t: number; voxel: Vec3; entryFace: Face } | null = null
   for (let z = 0; z < n; z++) {
     for (let y = 0; y < n; y++) {
       for (let x = 0; x < n; x++) {
@@ -491,34 +485,51 @@ function computeInteractionFocus(): InteractionFocus {
         const invY = 1 / rayD.y
         const invZ = 1 / rayD.z
         let tMin = -Infinity, tMax = Infinity
+        let entryFace: Face | null = null
+
         if (Math.abs(rayD.x) > 1e-8) {
           const t1 = (x - rayO.x) * invX
           const t2 = (x + 1 - rayO.x) * invX
-          tMin = Math.max(tMin, Math.min(t1, t2))
-          tMax = Math.min(tMax, Math.max(t1, t2))
+          if (t1 < t2) {
+            if (t1 > tMin) { tMin = t1; entryFace = { axis: 'x', sign: -1, position: 0 } }
+            tMax = Math.min(tMax, t2)
+          } else {
+            if (t2 > tMin) { tMin = t2; entryFace = { axis: 'x', sign: 1, position: 0 } }
+            tMax = Math.min(tMax, t1)
+          }
         } else if (rayO.x < x || rayO.x > x + 1) {
           continue
         }
         if (Math.abs(rayD.y) > 1e-8) {
           const t1 = (y - rayO.y) * invY
           const t2 = (y + 1 - rayO.y) * invY
-          tMin = Math.max(tMin, Math.min(t1, t2))
-          tMax = Math.min(tMax, Math.max(t1, t2))
+          if (t1 < t2) {
+            if (t1 > tMin) { tMin = t1; entryFace = { axis: 'y', sign: -1, position: 0 } }
+            tMax = Math.min(tMax, t2)
+          } else {
+            if (t2 > tMin) { tMin = t2; entryFace = { axis: 'y', sign: 1, position: 0 } }
+            tMax = Math.min(tMax, t1)
+          }
         } else if (rayO.y < y || rayO.y > y + 1) {
           continue
         }
         if (Math.abs(rayD.z) > 1e-8) {
           const t1 = (z - rayO.z) * invZ
           const t2 = (z + 1 - rayO.z) * invZ
-          tMin = Math.max(tMin, Math.min(t1, t2))
-          tMax = Math.min(tMax, Math.max(t1, t2))
+          if (t1 < t2) {
+            if (t1 > tMin) { tMin = t1; entryFace = { axis: 'z', sign: -1, position: 0 } }
+            tMax = Math.min(tMax, t2)
+          } else {
+            if (t2 > tMin) { tMin = t2; entryFace = { axis: 'z', sign: 1, position: 0 } }
+            tMax = Math.min(tMax, t1)
+          }
         } else if (rayO.z < z || rayO.z > z + 1) {
           continue
         }
         if (tMin > tMax || tMax < 0) continue
         const tEnter = Math.max(tMin, 0)
         if (!bestVoxelHit || tEnter < bestVoxelHit.t) {
-          bestVoxelHit = { t: tEnter, voxel: { x, y, z } }
+          bestVoxelHit = { t: tEnter, voxel: { x, y, z }, entryFace: entryFace! }
         }
       }
     }
@@ -526,7 +537,7 @@ function computeInteractionFocus(): InteractionFocus {
 
   if (bestVoxelHit) {
     const v = bestVoxelHit.voxel
-    const face = getVoxelFace(v, cameraDir)
+    const face = bestVoxelHit.entryFace
     const normal = faceNormal(face.axis, face.sign)
     const target: Vec3 = {
       x: v.x + normal.x,
