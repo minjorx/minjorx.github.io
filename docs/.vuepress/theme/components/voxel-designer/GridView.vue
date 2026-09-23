@@ -37,7 +37,12 @@ const fpsRef = ref(0)
 const hoverInfoRef = ref<{ coord: Vec3; color: number; type: string } | null>(null)
 
 let ctx: ThreeContext | null = null
-let instancedMesh: THREE.InstancedMesh | null = null
+// 6 个面 mesh：按 [+X, -X, +Y, -Y, +Z, -Z] 顺序
+let faceMeshes: (THREE.InstancedMesh | null)[] = [null, null, null, null, null, null]
+// 每面 mesh 的 instance 对应哪个 voxel + 哪个 face（raycast 用）
+interface VisibleFace { voxel: Vec3; axis: 'x'|'y'|'z'; sign: 1|-1 }
+let faceData: VisibleFace[][] = [[], [], [], [], [], []]
+
 let ghostMeshIn: THREE.InstancedMesh | null = null
 let ghostMeshOut: THREE.InstancedMesh | null = null
 let indicatorMesh: THREE.LineSegments | null = null
@@ -45,10 +50,6 @@ let boxHelper: THREE.LineSegments | null = null
 let gridLines: THREE.LineSegments | null = null
 let axesGroup: THREE.Group | null = null
 let faceHighlight: THREE.Mesh | null = null
-let threeN = 0
-
-// instanceId → 体素坐标 的映射（每次重建 InstancedMesh 时同步更新）
-let instanceIdToCoord: Vec3[] = []
 
 const raycaster = new THREE.Raycaster()
 const mouse = new THREE.Vector2()
@@ -88,13 +89,17 @@ function voxelColor(v: number): THREE.Color {
   return new THREE.Color((hex >> 16) / 255, ((hex >> 8) & 0xff) / 255, (hex & 0xff) / 255)
 }
 
-function buildInstancedMesh(scene: THREE.Scene, n: number) {
-  if (instancedMesh) {
-    scene.remove(instancedMesh)
-    instancedMesh.geometry.dispose()
-    ;(instancedMesh.material as THREE.Material).dispose()
-    instancedMesh = null
+function buildFaceMeshes(scene: THREE.Scene, n: number) {
+  // 清理旧 6 面 mesh
+  for (const m of faceMeshes) {
+    if (m) {
+      scene.remove(m)
+      m.geometry.dispose()
+      ;(m.material as THREE.Material).dispose()
+    }
   }
+  faceMeshes = [null, null, null, null, null, null]
+
   if (ghostMeshIn) {
     scene.remove(ghostMeshIn)
     ghostMeshIn.geometry.dispose()
@@ -108,51 +113,107 @@ function buildInstancedMesh(scene: THREE.Scene, n: number) {
     ghostMeshOut = null
   }
 
-  const geometry = new THREE.BoxGeometry(1, 1, 1)
+  // 6 个面共享一个 PlaneGeometry(1,1)，normal=+Z
+  // 每个 instance 通过 quaternion.setFromUnitVectors(+Z, faceNormal) 旋转到对应方向
+  const faceGeometry = new THREE.PlaneGeometry(1, 1)
   const material = new THREE.MeshLambertMaterial({ vertexColors: false })
-  instancedMesh = new THREE.InstancedMesh(geometry, material, n * n * n)
-  instancedMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage)
-  instancedMesh.count = 0
-  scene.add(instancedMesh)
+  const maxInstances = n * n * n  // 最坏情况
 
+  for (let i = 0; i < 6; i++) {
+    const mesh = new THREE.InstancedMesh(faceGeometry, material, maxInstances)
+    mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage)
+    mesh.count = 0
+    scene.add(mesh)
+    faceMeshes[i] = mesh
+  }
+
+  // ghost meshes 保留（用 box geometry）
+  const boxGeometry = new THREE.BoxGeometry(1, 1, 1)
   const ghostInMat = new THREE.MeshBasicMaterial({
     color: 0xffffff, transparent: true, opacity: 0.4, depthWrite: false,
   })
-  ghostMeshIn = new THREE.InstancedMesh(geometry.clone(), ghostInMat, 4096)
+  ghostMeshIn = new THREE.InstancedMesh(boxGeometry, ghostInMat, 4096)
   ghostMeshIn.count = 0
   scene.add(ghostMeshIn)
 
   const ghostOutMat = new THREE.MeshBasicMaterial({
     color: 0xff9800, transparent: true, opacity: 0.3, depthWrite: false,
   })
-  ghostMeshOut = new THREE.InstancedMesh(geometry.clone(), ghostOutMat, 4096)
+  ghostMeshOut = new THREE.InstancedMesh(boxGeometry, ghostOutMat, 4096)
   ghostMeshOut.count = 0
   scene.add(ghostMeshOut)
 }
 
-function updateInstancedFromGrid(grid: VoxelGrid) {
-  if (!instancedMesh) return
+function updateFaceMeshes(grid: VoxelGrid) {
+  if (!faceMeshes[0]) return
   const n = grid.n
-  const dummy = new THREE.Object3D()
-  instanceIdToCoord = []
-  let idx = 0
+
+  // 重置 faceData
+  for (const arr of faceData) arr.length = 0
+
+  // 遍历所有体素，检查邻居；邻居空 → 该面可见
   for (let z = 0; z < n; z++) {
     for (let y = 0; y < n; y++) {
       for (let x = 0; x < n; x++) {
         const v = grid.data[grid.toIdx(x, y, z)]
         if (v === 0) continue
-        dummy.position.set(x + 0.5, y + 0.5, z + 0.5)
-        dummy.updateMatrix()
-        instancedMesh.setMatrixAt(idx, dummy.matrix)
-        instancedMesh.setColorAt(idx, voxelColor(v))
-        instanceIdToCoord[idx] = { x, y, z }
-        idx++
+
+        // +X
+        if (x + 1 >= n || grid.data[grid.toIdx(x+1, y, z)] === 0) {
+          faceData[0].push({ voxel: { x, y, z }, axis: 'x', sign: 1 })
+        }
+        // -X
+        if (x - 1 < 0 || grid.data[grid.toIdx(x-1, y, z)] === 0) {
+          faceData[1].push({ voxel: { x, y, z }, axis: 'x', sign: -1 })
+        }
+        // +Y
+        if (y + 1 >= n || grid.data[grid.toIdx(x, y+1, z)] === 0) {
+          faceData[2].push({ voxel: { x, y, z }, axis: 'y', sign: 1 })
+        }
+        // -Y
+        if (y - 1 < 0 || grid.data[grid.toIdx(x, y-1, z)] === 0) {
+          faceData[3].push({ voxel: { x, y, z }, axis: 'y', sign: -1 })
+        }
+        // +Z
+        if (z + 1 >= n || grid.data[grid.toIdx(x, y, z+1)] === 0) {
+          faceData[4].push({ voxel: { x, y, z }, axis: 'z', sign: 1 })
+        }
+        // -Z
+        if (z - 1 < 0 || grid.data[grid.toIdx(x, y, z-1)] === 0) {
+          faceData[5].push({ voxel: { x, y, z }, axis: 'z', sign: -1 })
+        }
       }
     }
   }
-  instancedMesh.count = idx
-  instancedMesh.instanceMatrix.needsUpdate = true
-  if (instancedMesh.instanceColor) instancedMesh.instanceColor.needsUpdate = true
+
+  // 填充 6 个 mesh
+  const dummy = new THREE.Object3D()
+  for (let i = 0; i < 6; i++) {
+    const mesh = faceMeshes[i]!
+    const arr = faceData[i]
+    mesh.count = arr.length
+    for (let j = 0; j < arr.length; j++) {
+      const f = arr[j]
+      // 面在 cell 边界上：+方向 voxel[axis]+1，-方向 voxel[axis]
+      const facePos = f.voxel[f.axis] + (f.sign > 0 ? 1 : 0)
+      const cx = f.axis === 'x' ? facePos : f.voxel.x + 0.5
+      const cy = f.axis === 'y' ? facePos : f.voxel.y + 0.5
+      const cz = f.axis === 'z' ? facePos : f.voxel.z + 0.5
+
+      _tmpVec3a.set(
+        f.axis === 'x' ? f.sign : 0,
+        f.axis === 'y' ? f.sign : 0,
+        f.axis === 'z' ? f.sign : 0,
+      )
+      dummy.quaternion.setFromUnitVectors(_NORMAL_Z, _tmpVec3a)
+      dummy.position.set(cx, cy, cz)
+      dummy.updateMatrix()
+      mesh.setMatrixAt(j, dummy.matrix)
+      mesh.setColorAt(j, voxelColor(grid.data[grid.toIdx(f.voxel.x, f.voxel.y, f.voxel.z)]))
+    }
+    mesh.instanceMatrix.needsUpdate = true
+    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true
+  }
 }
 
 function buildBoxHelper(scene: THREE.Scene, n: number) {
@@ -307,6 +368,7 @@ function updateFaceHighlight(focus: InteractionFocus, n: number) {
 // 复用的临时向量（必须在使用前声明）
 const _tmpVec3a = new THREE.Vector3()
 const _tmpVec3b = new THREE.Vector3()
+const _NORMAL_Z = new THREE.Vector3(0, 0, 1)
 
 // ============ 核心：计算交互焦点 ============
 
@@ -326,31 +388,36 @@ function computeInteractionFocus(): InteractionFocus {
     z: raycaster.ray.direction.z,
   }
 
-  // === 阶段 1：射线命中已放体素 → 用 hit.face.normal 决定交互面 ===
-  if (instancedMesh && instancedMesh.count > 0) {
-    const hits = raycaster.intersectObject(instancedMesh, false)
+  // === 阶段 1：射线命中已放体素的可见面（6 个 face mesh） ===
+  let closestHit: { dist: number; meshIdx: number; instanceId: number } | null = null
+  for (let i = 0; i < 6; i++) {
+    const m = faceMeshes[i]
+    if (!m || m.count === 0) continue
+    const hits = raycaster.intersectObject(m, false)
     if (hits.length > 0) {
-      const hit = hits[0]
-      const id = hit.instanceId ?? 0
-      const voxel = instanceIdToCoord[id]
-      if (voxel && hit.face) {
-        const face = normalToFace(hit.face.normal)
-        const normal = faceNormal(face.axis, face.sign)
-        const target: Vec3 = {
-          x: voxel.x + normal.x,
-          y: voxel.y + normal.y,
-          z: voxel.z + normal.z,
-        }
-        const inBounds = props.grid.inBounds(target)
-        const occupied = inBounds && props.grid.isOccupied(target)
-        return {
-          type: 'voxel',
-          coord: voxel,
-          target,
-          face,
-          valid: inBounds && !occupied,
-          reason: !inBounds ? 'out-of-bounds' : occupied ? 'occupied' : undefined,
-        }
+      const inst = hits[0].instanceId ?? 0
+      if (!closestHit || hits[0].distance < closestHit.dist) {
+        closestHit = { dist: hits[0].distance, meshIdx: i, instanceId: inst }
+      }
+    }
+  }
+  if (closestHit) {
+    const f = faceData[closestHit.meshIdx][closestHit.instanceId]
+    if (f) {
+      const target: Vec3 = {
+        x: f.voxel.x + (f.axis === 'x' ? f.sign : 0),
+        y: f.voxel.y + (f.axis === 'y' ? f.sign : 0),
+        z: f.voxel.z + (f.axis === 'z' ? f.sign : 0),
+      }
+      const inBounds = props.grid.inBounds(target)
+      const occupied = inBounds && props.grid.isOccupied(target)
+      return {
+        type: 'voxel',
+        coord: f.voxel,
+        target,
+        face: { axis: f.axis, sign: f.sign, position: 0 },
+        valid: inBounds && !occupied,
+        reason: !inBounds ? 'out-of-bounds' : occupied ? 'occupied' : undefined,
       }
     }
   }
@@ -632,8 +699,8 @@ function handleResize() {
 // ============ 监听 props ============
 
 watch(() => props.gridVersion, () => {
-  if (ctx && instancedMesh) {
-    updateInstancedFromGrid(props.grid)
+  if (ctx && faceMeshes[0]) {
+    updateFaceMeshes(props.grid)
   }
 })
 
@@ -649,14 +716,13 @@ watch(() => props.isDark, () => {
 
 watch(() => props.grid.n, () => {
   if (ctx) {
-    buildInstancedMesh(ctx.scene, props.grid.n)
+    buildFaceMeshes(ctx.scene, props.grid.n)
     buildBoxHelper(ctx.scene, props.grid.n)
     buildGridLines(ctx.scene, props.grid.n)
     buildAxes(ctx.scene, props.grid.n)
     buildIndicator(ctx.scene, props.grid.n)
     buildFaceHighlight(ctx.scene, props.grid.n)
-    threeN = props.grid.n
-    updateInstancedFromGrid(props.grid)
+    updateFaceMeshes(props.grid)
   }
 })
 
@@ -687,15 +753,14 @@ function animate() {
 
 onMounted(async () => {
   if (!canvasRef.value) return
-  threeN = props.grid.n
   ctx = await createThreeScene(canvasRef.value, props.grid.n)
-  buildInstancedMesh(ctx.scene, props.grid.n)
+  buildFaceMeshes(ctx.scene, props.grid.n)
   buildBoxHelper(ctx.scene, props.grid.n)
   buildGridLines(ctx.scene, props.grid.n)
   buildAxes(ctx.scene, props.grid.n)
   buildIndicator(ctx.scene, props.grid.n)
   buildFaceHighlight(ctx.scene, props.grid.n)
-  updateInstancedFromGrid(props.grid)
+  updateFaceMeshes(props.grid)
 
   const canvas = canvasRef.value
   canvas.style.cursor = getCursorForMode(props.mode)
