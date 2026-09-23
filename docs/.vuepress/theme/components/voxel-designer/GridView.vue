@@ -7,7 +7,7 @@ import { createThreeScene, type ThreeContext } from './lib/three-setup'
 import { mirrorCoord } from './lib/symmetry'
 import type { Template } from './lib/templates'
 import {
-  getVoxelFace, getSpaceFace, raycastSpaceFace,
+  getVoxelFace, getSpaceFace, raycastSpaceFace, raycastPlane,
   faceNormal,
   type Face,
 } from './lib/interaction'
@@ -57,7 +57,8 @@ const mouse = new THREE.Vector2()
 let isDragging = false
 let dragMode: 'paint' | 'erase' | null = null
 const dragPainted = new Set<number>()
-let dragStartFocusType: 'voxel' | 'space' | null = null
+// 拖动 paint 用的固定平面（由起始 focus 的 face 计算出）
+let dragPlane: { axis: 'x'|'y'|'z'; sign: -1|1; position: number } | null = null
 
 // 平移画面状态
 let isPanning = false
@@ -424,6 +425,22 @@ function updateGhostAndHighlight(focus: InteractionFocus) {
   }
 }
 
+/** 计算拖动用的固定平面（由起始 focus 决定） */
+function computeDragPlane(focus: InteractionFocus): { axis: 'x'|'y'|'z'; sign: -1|1; position: number } | null {
+  if (!focus.face) return null
+  const f = focus.face
+  if (focus.type === 'voxel' && focus.coord) {
+    // voxel 面：平面位置 = 体素坐标 + 1（在面法线方向）
+    let pos = 0
+    if (f.axis === 'x') pos = focus.coord.x + f.sign
+    else if (f.axis === 'y') pos = focus.coord.y + f.sign
+    else pos = focus.coord.z + f.sign
+    return { axis: f.axis, sign: f.sign, position: pos }
+  }
+  // space 面：position 直接是 0 或 N
+  return { axis: f.axis, sign: f.sign, position: f.position }
+}
+
 // ============ 鼠标事件 ============
 
 function getMouseNDC(e: MouseEvent): THREE.Vector2 {
@@ -483,21 +500,30 @@ function handlePointerMove(e: PointerEvent) {
   }
 
   // 拖动涂/擦
-  if (isDragging && dragMode && currentFocus.type !== 'none' && currentFocus.target) {
-    // 拖动期间只在同类型焦点继续
-    if (currentFocus.type !== dragStartFocusType) return
-    const target = currentFocus.target
-    const idx = props.grid.toIdx(target.x, target.y, target.z)
-    if (dragMode === 'paint') {
-      if (props.grid.get(target.x, target.y, target.z) !== 0) return
-    } else {
-      // erase
-      if (props.grid.get(target.x, target.y, target.z) === 0) return
-    }
+  if (isDragging && dragMode === 'paint' && dragPlane) {
+    // 沿起始固定平面绘制鼠标投影 → 连续不空洞
+    const planeTarget = raycastPlane(
+      { x: raycaster.ray.origin.x, y: raycaster.ray.origin.y, z: raycaster.ray.origin.z },
+      { x: raycaster.ray.direction.x, y: raycaster.ray.direction.y, z: raycaster.ray.direction.z },
+      dragPlane,
+    )
+    if (!planeTarget) return
+    if (!props.grid.inBounds(planeTarget)) return
+    if (props.grid.get(planeTarget.x, planeTarget.y, planeTarget.z) !== 0) return
+    const idx = props.grid.toIdx(planeTarget.x, planeTarget.y, planeTarget.z)
     if (!dragPainted.has(idx)) {
       dragPainted.add(idx)
-      if (dragMode === 'paint') emit('paint-at', target)
-      else emit('erase-at', target)
+      emit('paint-at', planeTarget)
+    }
+  } else if (isDragging && dragMode === 'erase') {
+    // 拖动擦除跟随 focus：鼠标当前命中体素就擦
+    if (currentFocus.type !== 'voxel' || !currentFocus.coord) return
+    const coord = currentFocus.coord
+    if (props.grid.get(coord.x, coord.y, coord.z) === 0) return
+    const idx = props.grid.toIdx(coord.x, coord.y, coord.z)
+    if (!dragPainted.has(idx)) {
+      dragPainted.add(idx)
+      emit('erase-at', coord)
     }
   }
 }
@@ -544,13 +570,15 @@ function handlePointerDown(e: PointerEvent) {
         if (focus.valid) emit('place-template', focus.target)
         return
       }
-      if (focus.valid) {
+      if (focus.valid && focus.face) {
         isDragging = true
         dragMode = 'paint'
-        dragStartFocusType = focus.type
+        // 计算固定平面：起始 focus 的 face 的位置平面
+        dragPlane = computeDragPlane(focus)
         dragPainted.clear()
-        dragPainted.add(props.grid.toIdx(focus.target.x, focus.target.y, focus.target.z))
-        emit('paint-at', focus.target)
+        const target = focus.target
+        dragPainted.add(props.grid.toIdx(target.x, target.y, target.z))
+        emit('paint-at', target)
       }
     } else if (props.mode === 'fill') {
       if (focus.type === 'voxel' && focus.coord && focus.valid) {
@@ -571,7 +599,6 @@ function handlePointerDown(e: PointerEvent) {
     if (focus.type === 'voxel' && focus.coord) {
       isDragging = true
       dragMode = 'erase'
-      dragStartFocusType = focus.type
       dragPainted.clear()
       const idx = props.grid.toIdx(focus.coord.x, focus.coord.y, focus.coord.z)
       dragPainted.add(idx)
@@ -586,7 +613,7 @@ function handlePointerUp() {
     isDragging = false
     dragMode = null
     dragPainted.clear()
-    dragStartFocusType = null
+    dragPlane = null
   }
   if (isPanning) {
     isPanning = false
@@ -608,7 +635,7 @@ function handlePointerLeave() {
     isDragging = false
     dragMode = null
     dragPainted.clear()
-    dragStartFocusType = null
+    dragPlane = null
   }
   if (isPanning) {
     isPanning = false

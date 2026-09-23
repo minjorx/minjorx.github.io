@@ -117,3 +117,24 @@ export function raycastSpaceFace(
   if (face.axis === 'y') return { x: Math.floor(hx), y: face.position, z: Math.floor(hz) }
   return { x: Math.floor(hx), y: Math.floor(hy), z: face.position }
 }
+
+/**
+ * 通用：ray 与给定 plane 相交，返回该平面上的整数坐标（不 clamp）
+ */
+export function raycastPlane(
+  rayOrigin: Vec3,
+  rayDir: Vec3,
+  plane: { axis: Axis; sign: Sign; position: number },
+): Vec3 | null {
+  const normal = faceNormal(plane.axis, plane.sign)
+  const denom = rayDir.x * normal.x + rayDir.y * normal.y + rayDir.z * normal.z
+  if (Math.abs(denom) < 1e-6) return null
+  const t = (plane.position - (rayOrigin.x * normal.x + rayOrigin.y * normal.y + rayOrigin.z * normal.z)) / denom
+  if (t < 0) return null
+  const hx = rayOrigin.x + rayDir.x * t
+  const hy = rayOrigin.y + rayDir.y * t
+  const hz = rayOrigin.z + rayDir.z * t
+  if (plane.axis === 'x') return { x: plane.position, y: Math.floor(hy), z: Math.floor(hz) }
+  if (plane.axis === 'y') return { x: Math.floor(hx), y: plane.position, z: Math.floor(hz) }
+  return { x: Math.floor(hx), y: Math.floor(hy), z: plane.position }
+}
