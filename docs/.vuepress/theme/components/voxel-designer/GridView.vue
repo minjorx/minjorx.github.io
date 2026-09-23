@@ -469,21 +469,24 @@ function computeInteractionFocus(): InteractionFocus {
     z: raycaster.ray.direction.z,
   }
 
-  // === 阶段 1：射线命中已放体素的可见面（6 个 face mesh） ===
-  let closestHit: { dist: number; meshIdx: number; instanceId: number } | null = null
+  // === 阶段 1：射线命中已放体素的可见面 ===
+  // 关键：体素面命中永远优先于空间面（无论距离远近）。
+  // 因为用户期望"鼠标在体素上就用体素面"。
+  // 同时：每个 face mesh 可能被同一射线穿过多个体素，要取全局最近，不是各 mesh 各自 hits[0]。
+  let bestVoxel: { dist: number; meshIdx: number; instanceId: number } | null = null
   for (let i = 0; i < 6; i++) {
     const m = faceMeshes[i]
     if (!m || m.count === 0) continue
     const hits = raycaster.intersectObject(m, false)
-    if (hits.length > 0) {
-      const inst = hits[0].instanceId ?? 0
-      if (!closestHit || hits[0].distance < closestHit.dist) {
-        closestHit = { dist: hits[0].distance, meshIdx: i, instanceId: inst }
+    for (const hit of hits) {
+      if (hit.instanceId === undefined) continue
+      if (!bestVoxel || hit.distance < bestVoxel.dist) {
+        bestVoxel = { dist: hit.distance, meshIdx: i, instanceId: hit.instanceId }
       }
     }
   }
-  if (closestHit) {
-    const f = faceData[closestHit.meshIdx][closestHit.instanceId]
+  if (bestVoxel) {
+    const f = faceData[bestVoxel.meshIdx][bestVoxel.instanceId]
     if (f) {
       const target: Vec3 = {
         x: f.voxel.x + (f.axis === 'x' ? f.sign : 0),
