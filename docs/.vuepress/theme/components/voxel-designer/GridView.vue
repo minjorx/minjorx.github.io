@@ -7,7 +7,7 @@ import { createThreeScene, type ThreeContext } from './lib/three-setup'
 import { mirrorCoord } from './lib/symmetry'
 import type { Template } from './lib/templates'
 import {
-  getVoxelFace, getSpaceFace, raycastSpaceFace,
+  getAllSpaceFaces, raycastPlane, normalToFace,
   faceNormal,
   type Face,
 } from './lib/interaction'
@@ -310,30 +310,26 @@ function computeInteractionFocus(): InteractionFocus {
     return { type: 'none', coord: null, target: null, face: null, valid: false }
   }
   const n = props.grid.n
-  const cameraPos: Vec3 = {
-    x: ctx.camera.position.x,
-    y: ctx.camera.position.y,
-    z: ctx.camera.position.z,
+  const rayO: Vec3 = {
+    x: raycaster.ray.origin.x,
+    y: raycaster.ray.origin.y,
+    z: raycaster.ray.origin.z,
   }
-  const center: Vec3 = { x: n / 2, y: n / 2, z: n / 2 }
-  const dx = cameraPos.x - center.x
-  const dy = cameraPos.y - center.y
-  const dz = cameraPos.z - center.z
-  const l = Math.sqrt(dx * dx + dy * dy + dz * dz)
-  if (l === 0) {
-    return { type: 'none', coord: null, target: null, face: null, valid: false }
+  const rayD: Vec3 = {
+    x: raycaster.ray.direction.x,
+    y: raycaster.ray.direction.y,
+    z: raycaster.ray.direction.z,
   }
-  const cameraDir: Vec3 = { x: dx / l, y: dy / l, z: dz / l }
 
-  // 阶段 1：射线命中已放体素
+  // === 阶段 1：射线命中已放体素 → 用 hit.face.normal 决定交互面 ===
   if (instancedMesh && instancedMesh.count > 0) {
     const hits = raycaster.intersectObject(instancedMesh, false)
     if (hits.length > 0) {
       const hit = hits[0]
       const id = hit.instanceId ?? 0
       const voxel = instanceIdToCoord[id]
-      if (voxel) {
-        const face = getVoxelFace(voxel, cameraDir)
+      if (voxel && hit.face) {
+        const face = normalToFace(hit.face.normal)
         const normal = faceNormal(face.axis, face.sign)
         const target: Vec3 = {
           x: voxel.x + normal.x,
@@ -354,25 +350,32 @@ function computeInteractionFocus(): InteractionFocus {
     }
   }
 
-  // 阶段 2：空间边界面（取远离摄像机的）
-  const spaceFace = getSpaceFace(n, cameraDir)
-  const spaceFaceWithPos: Face = { ...spaceFace, position: spaceFace.sign > 0 ? n : 0 }
-  const rayO: Vec3 = { x: raycaster.ray.origin.x, y: raycaster.ray.origin.y, z: raycaster.ray.origin.z }
-  const rayD: Vec3 = { x: raycaster.ray.direction.x, y: raycaster.ray.direction.y, z: raycaster.ray.direction.z }
-  const target = raycastSpaceFace(rayO, rayD, spaceFaceWithPos)
-  if (target && props.grid.inBounds(target)) {
-    const occupied = props.grid.isOccupied(target)
+  // === 阶段 2：空间边界面 → 遍历 6 面，鼠标在哪面就是哪面，重复时取远的 ===
+  let bestT = -Infinity
+  let bestResult: { face: Face; target: Vec3 } | null = null
+  for (const face of getAllSpaceFaces(n)) {
+    const hit = raycastPlane(rayO, rayD, face)
+    if (!hit) continue
+    if (hit.t < 0) continue
+    if (!props.grid.inBounds(hit.target)) continue
+    if (hit.t > bestT) {
+      bestT = hit.t
+      bestResult = { face, target: hit.target }
+    }
+  }
+  if (bestResult) {
+    const occupied = props.grid.isOccupied(bestResult.target)
     return {
       type: 'space',
       coord: null,
-      target,
-      face: spaceFaceWithPos,
+      target: bestResult.target,
+      face: bestResult.face,
       valid: !occupied,
       reason: occupied ? 'occupied' : undefined,
     }
   }
 
-  // 阶段 3：无焦点
+  // === 阶段 3：无焦点 ===
   return { type: 'none', coord: null, target: null, face: null, valid: false }
 }
 
@@ -506,13 +509,27 @@ function handlePointerMove(e: PointerEvent) {
 function handlePointerDown(e: PointerEvent) {
   if (!ctx || !canvasRef.value) return
 
-  // LMB：进入"潜在点击"状态，由 OrbitControls 处理旋转
+  // LMB：
+  // - 无焦点 → OrbitControls 旋转（mouseButtons.LEFT = ROTATE）
+  // - 有焦点 → 临时禁掉 OrbitControls 旋转（mouseButtons.LEFT = null），准备点击动作
   if (e.button === 0) {
+    const ndc = getMouseNDC(e as any)
+    mouse.copy(ndc)
+    raycaster.setFromCamera(mouse, ctx.camera)
+    const focus = computeInteractionFocus()
+    currentFocus = focus
+
+    if (focus.type === 'none') {
+      // 无焦点 → OrbitControls 旋转；不设 lmbDown
+      return
+    }
+    // 有焦点 → 临时禁旋转，准备点击
+    if (ctx.controls) {
+      ctx.controls.mouseButtons.LEFT = null as any
+    }
     lmbDown = { x: e.clientX, y: e.clientY, time: Date.now(), isClick: true }
     return
   }
-
-  // MMB / RMB：OrbitControls 处理平移，无需操作
 }
 
 /** LMB 点击：基于当前 mode 触发动作（paint / fill / eyedrop / erase） */
@@ -552,13 +569,18 @@ function handleLmbClick(e: PointerEvent) {
 }
 
 function handlePointerUp(e: PointerEvent) {
-  // LMB up：检测是否为点击（短按 + 未移动）
-  if (e.button === 0 && lmbDown) {
-    const dt = Date.now() - lmbDown.time
-    if (lmbDown.isClick && dt < LMB_CLICK_MS) {
-      handleLmbClick(e)
+  // LMB up：恢复 OrbitControls 旋转；检测是否为点击
+  if (e.button === 0) {
+    if (ctx.controls) {
+      ctx.controls.mouseButtons.LEFT = THREE.MOUSE.ROTATE
     }
-    lmbDown = null
+    if (lmbDown) {
+      const dt = Date.now() - lmbDown.time
+      if (lmbDown.isClick && dt < LMB_CLICK_MS) {
+        handleLmbClick(e)
+      }
+      lmbDown = null
+    }
     return
   }
 

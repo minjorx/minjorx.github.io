@@ -97,35 +97,37 @@ export function getSpaceFace(n: number, cameraDir: Vec3): Face {
 
 /**
  * 计算 ray 与给定的空间面相交，返回该面上的 2D 体素坐标（可能越界）
+ * @deprecated 使用 raycastPlane 替代
  */
 export function raycastSpaceFace(
   rayOrigin: Vec3,
   rayDir: Vec3,
   face: Face,
 ): Vec3 | null {
-  const normal = faceNormal(face.axis, face.sign)
-  const denom = rayDir.x * normal.x + rayDir.y * normal.y + rayDir.z * normal.z
-  if (Math.abs(denom) < 1e-6) return null
-  // ray.origin + t * ray.dir 满足：点积(face.normal) = face.position
-  const t = (face.position - (rayOrigin.x * normal.x + rayOrigin.y * normal.y + rayOrigin.z * normal.z)) / denom
-  if (t < 0) return null
-  const hx = rayOrigin.x + rayDir.x * t
-  const hy = rayOrigin.y + rayDir.y * t
-  const hz = rayOrigin.z + rayDir.z * t
-  // 投影到该面上的 2D 坐标
-  if (face.axis === 'x') return { x: face.position, y: Math.floor(hy), z: Math.floor(hz) }
-  if (face.axis === 'y') return { x: Math.floor(hx), y: face.position, z: Math.floor(hz) }
-  return { x: Math.floor(hx), y: Math.floor(hy), z: face.position }
+  const result = raycastPlane(rayOrigin, rayDir, face)
+  return result ? result.target : null
+}
+
+/** 6 个空间面清单（用于遍历） */
+export function getAllSpaceFaces(n: number): Face[] {
+  return [
+    { axis: 'x', sign: 1, position: n },
+    { axis: 'x', sign: -1, position: 0 },
+    { axis: 'y', sign: 1, position: n },
+    { axis: 'y', sign: -1, position: 0 },
+    { axis: 'z', sign: 1, position: n },
+    { axis: 'z', sign: -1, position: 0 },
+  ]
 }
 
 /**
- * 通用：ray 与给定 plane 相交，返回该平面上的整数坐标（不 clamp）
+ * 通用：ray 与给定 plane 相交，返回该平面上的整数坐标 + t（不 clamp）
  */
 export function raycastPlane(
   rayOrigin: Vec3,
   rayDir: Vec3,
   plane: { axis: Axis; sign: Sign; position: number },
-): Vec3 | null {
+): { target: Vec3; t: number } | null {
   const normal = faceNormal(plane.axis, plane.sign)
   const denom = rayDir.x * normal.x + rayDir.y * normal.y + rayDir.z * normal.z
   if (Math.abs(denom) < 1e-6) return null
@@ -134,7 +136,21 @@ export function raycastPlane(
   const hx = rayOrigin.x + rayDir.x * t
   const hy = rayOrigin.y + rayDir.y * t
   const hz = rayOrigin.z + rayDir.z * t
-  if (plane.axis === 'x') return { x: plane.position, y: Math.floor(hy), z: Math.floor(hz) }
-  if (plane.axis === 'y') return { x: Math.floor(hx), y: plane.position, z: Math.floor(hz) }
-  return { x: Math.floor(hx), y: Math.floor(hy), z: plane.position }
+  let target: Vec3
+  if (plane.axis === 'x') target = { x: plane.position, y: Math.floor(hy), z: Math.floor(hz) }
+  else if (plane.axis === 'y') target = { x: Math.floor(hx), y: plane.position, z: Math.floor(hz) }
+  else target = { x: Math.floor(hx), y: Math.floor(hy), z: plane.position }
+  return { target, t }
+}
+
+/** 由 hit.face.normal (Three.js 击中面法线) 反推出 Face 描述 */
+export function normalToFace(normal: { x: number; y: number; z: number }): Face {
+  const ax = Math.abs(normal.x), ay = Math.abs(normal.y), az = Math.abs(normal.z)
+  if (ax >= ay && ax >= az) {
+    return { axis: 'x', sign: normal.x > 0 ? 1 : -1, position: 0 }
+  }
+  if (ay >= az) {
+    return { axis: 'y', sign: normal.y > 0 ? 1 : -1, position: 0 }
+  }
+  return { axis: 'z', sign: normal.z > 0 ? 1 : -1, position: 0 }
 }

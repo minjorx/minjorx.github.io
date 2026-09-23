@@ -19,7 +19,7 @@ import type { SymmetryAxis } from './lib/symmetry'
 import type { PrefabFile } from './lib/prefab'
 
 // ---------- 状态 ----------
-const grid = ref<VoxelGrid>(new VoxelGrid(32))
+const grid = ref<VoxelGrid>(new VoxelGrid(8))
 const gridVersion = ref(0)  // 每次数据变更 +1，用于触发响应
 const undoStack = new UndoStack()
 const undoState = reactive({ canUndo: false, canRedo: false })
@@ -30,7 +30,7 @@ const snapMode = ref<SnapMode>('voxel-face')
 const symmetry = ref<SymmetryAxis>('off')
 const symmetryHeld = ref<SymmetryAxis | null>(null)
 const mode = ref<'paint' | 'erase' | 'fill' | 'eyedrop' | 'replace'>('paint')
-const gridN = ref<NValue>(32)
+const gridN = ref<NValue>(8)
 
 const prefabs = ref<PrefabFile[]>([])
 const replaceFromColor = ref<number | null>(null)
