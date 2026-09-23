@@ -7,7 +7,7 @@ import { createThreeScene, type ThreeContext } from './lib/three-setup'
 import { mirrorCoord } from './lib/symmetry'
 import type { Template } from './lib/templates'
 import {
-  getVoxelFace, getSpaceFace, raycastSpaceFace, raycastPlane,
+  getVoxelFace, getSpaceFace, raycastSpaceFace,
   faceNormal,
   type Face,
 } from './lib/interaction'
@@ -53,12 +53,16 @@ let instanceIdToCoord: Vec3[] = []
 const raycaster = new THREE.Raycaster()
 const mouse = new THREE.Vector2()
 
-// 拖动状态
+// 拖动状态（仅 RMB 擦除用）
 let isDragging = false
 let dragMode: 'paint' | 'erase' | null = null
 const dragPainted = new Set<number>()
-// 拖动 paint 用的固定平面（由起始 focus 的 face 计算出）
-let dragPlane: { axis: 'x'|'y'|'z'; sign: -1|1; position: number } | null = null
+
+// LMB 点击检测（区分 click 与 orbit drag）
+const LMB_CLICK_PX = 3
+const LMB_CLICK_MS = 300
+interface LmbDownState { x: number; y: number; time: number; isClick: boolean }
+let lmbDown: LmbDownState | null = null
 
 // 平移画面状态
 let isPanning = false
@@ -425,22 +429,6 @@ function updateGhostAndHighlight(focus: InteractionFocus) {
   }
 }
 
-/** 计算拖动用的固定平面（由起始 focus 决定） */
-function computeDragPlane(focus: InteractionFocus): { axis: 'x'|'y'|'z'; sign: -1|1; position: number } | null {
-  if (!focus.face) return null
-  const f = focus.face
-  if (focus.type === 'voxel' && focus.coord) {
-    // voxel 面：平面位置 = 体素坐标 + 1（在面法线方向）
-    let pos = 0
-    if (f.axis === 'x') pos = focus.coord.x + f.sign
-    else if (f.axis === 'y') pos = focus.coord.y + f.sign
-    else pos = focus.coord.z + f.sign
-    return { axis: f.axis, sign: f.sign, position: pos }
-  }
-  // space 面：position 直接是 0 或 N
-  return { axis: f.axis, sign: f.sign, position: f.position }
-}
-
 // ============ 鼠标事件 ============
 
 function getMouseNDC(e: MouseEvent): THREE.Vector2 {
@@ -454,25 +442,13 @@ function getMouseNDC(e: MouseEvent): THREE.Vector2 {
 function handlePointerMove(e: PointerEvent) {
   if (!ctx || !canvasRef.value) return
 
-  // 处理平移
-  if (isPanning && panStart && ctx.controls) {
-    const dx = e.clientX - panStart.x
-    const dy = e.clientY - panStart.y
-    const distance = ctx.camera.position.distanceTo(new THREE.Vector3(
-      panStart.target.x, panStart.target.y, panStart.target.z
-    ))
-    const panSpeed = distance * 0.002
-    // 摄像机 right/up 向量
-    const right = new THREE.Vector3()
-    const up = new THREE.Vector3()
-    const fwd = new THREE.Vector3()
-    ctx.camera.matrixWorld.extractBasis(right, up, fwd)
-    right.multiplyScalar(-dx * panSpeed)
-    up.multiplyScalar(dy * panSpeed)
-    ctx.camera.position.add(right).add(up)
-    ctx.controls.target.add(right).add(up)
-    ctx.controls.update()
-    return
+  // LMB down 期间：检测是否已经超过点击阈值 → 标记为 drag（OrbitControls 接管旋转）
+  if (lmbDown && lmbDown.isClick) {
+    const dx = e.clientX - lmbDown.x
+    const dy = e.clientY - lmbDown.y
+    if (Math.abs(dx) > LMB_CLICK_PX || Math.abs(dy) > LMB_CLICK_PX) {
+      lmbDown.isClick = false  // 进入拖动状态
+    }
   }
 
   const ndc = getMouseNDC(e as any)
@@ -499,24 +475,8 @@ function handlePointerMove(e: PointerEvent) {
     emit('hover', null)
   }
 
-  // 拖动涂/擦
-  if (isDragging && dragMode === 'paint' && dragPlane) {
-    // 沿起始固定平面绘制鼠标投影 → 连续不空洞
-    const planeTarget = raycastPlane(
-      { x: raycaster.ray.origin.x, y: raycaster.ray.origin.y, z: raycaster.ray.origin.z },
-      { x: raycaster.ray.direction.x, y: raycaster.ray.direction.y, z: raycaster.ray.direction.z },
-      dragPlane,
-    )
-    if (!planeTarget) return
-    if (!props.grid.inBounds(planeTarget)) return
-    if (props.grid.get(planeTarget.x, planeTarget.y, planeTarget.z) !== 0) return
-    const idx = props.grid.toIdx(planeTarget.x, planeTarget.y, planeTarget.z)
-    if (!dragPainted.has(idx)) {
-      dragPainted.add(idx)
-      emit('paint-at', planeTarget)
-    }
-  } else if (isDragging && dragMode === 'erase') {
-    // 拖动擦除跟随 focus：鼠标当前命中体素就擦
+  // RMB 拖动擦除
+  if (isDragging && dragMode === 'erase') {
     if (currentFocus.type !== 'voxel' || !currentFocus.coord) return
     const coord = currentFocus.coord
     if (props.grid.get(coord.x, coord.y, coord.z) === 0) return
@@ -530,98 +490,83 @@ function handlePointerMove(e: PointerEvent) {
 
 function handlePointerDown(e: PointerEvent) {
   if (!ctx || !canvasRef.value) return
-  if (e.button !== 0 && e.button !== 2) return
 
+  // LMB：进入"潜在点击"状态，由 OrbitControls 处理旋转
+  if (e.button === 0) {
+    lmbDown = { x: e.clientX, y: e.clientY, time: Date.now(), isClick: true }
+    return
+  }
+
+  // RMB：擦除
+  if (e.button === 2) {
+    const ndc = getMouseNDC(e as any)
+    mouse.copy(ndc)
+    raycaster.setFromCamera(mouse, ctx.camera)
+    const focus = computeInteractionFocus()
+    currentFocus = focus
+    if (focus.type === 'voxel' && focus.coord) {
+      const v = props.grid.get(focus.coord.x, focus.coord.y, focus.coord.z)
+      if (v !== 0) {
+        isDragging = true
+        dragMode = 'erase'
+        dragPainted.clear()
+        const idx = props.grid.toIdx(focus.coord.x, focus.coord.y, focus.coord.z)
+        dragPainted.add(idx)
+        emit('erase-at', focus.coord)
+      }
+    }
+    return
+  }
+
+  // MMB：OrbitControls 处理平移，无需操作
+}
+
+/** LMB 点击：基于当前 mode 触发动作（paint / fill / eyedrop） */
+function handleLmbClick(e: PointerEvent) {
+  if (!ctx || !canvasRef.value) return
   const ndc = getMouseNDC(e as any)
   mouse.copy(ndc)
   raycaster.setFromCamera(mouse, ctx.camera)
   const focus = computeInteractionFocus()
   currentFocus = focus
+  if (focus.type === 'none' || !focus.target) return
 
-  // 无焦点 → 平移画面
-  if (focus.type === 'none') {
-    if (e.button === 0 && ctx.controls) {
-      isPanning = true
-      panStart = {
-        x: e.clientX,
-        y: e.clientY,
-        target: {
-          x: ctx.controls.target.x,
-          y: ctx.controls.target.y,
-          z: ctx.controls.target.z,
-        },
-        position: {
-          x: ctx.camera.position.x,
-          y: ctx.camera.position.y,
-          z: ctx.camera.position.z,
-        },
-      }
-      canvasRef.value.style.cursor = 'grabbing'
+  if (props.mode === 'paint') {
+    if (props.template && props.template.id !== 'pixel') {
+      if (focus.valid) emit('place-template', focus.target)
+    } else if (focus.valid) {
+      emit('paint-at', focus.target)
     }
-    return
-  }
-
-  // 左键：根据 mode 处理
-  if (e.button === 0) {
-    if (!focus.target) return
-
-    if (props.mode === 'paint') {
-      if (props.template && props.template.id !== 'pixel') {
-        if (focus.valid) emit('place-template', focus.target)
-        return
-      }
-      if (focus.valid && focus.face) {
-        isDragging = true
-        dragMode = 'paint'
-        // 计算固定平面：起始 focus 的 face 的位置平面
-        dragPlane = computeDragPlane(focus)
-        dragPainted.clear()
-        const target = focus.target
-        dragPainted.add(props.grid.toIdx(target.x, target.y, target.z))
-        emit('paint-at', target)
-      }
-    } else if (props.mode === 'fill') {
-      if (focus.type === 'voxel' && focus.coord && focus.valid) {
-        emit('fill-at', focus.coord)
-      } else if (focus.type === 'space') {
-        emit('fill-at', focus.target)
-      }
-    } else if (props.mode === 'eyedrop') {
-      if (focus.type === 'voxel' && focus.coord) {
-        emit('eyedrop-at', focus.coord)
-      } else if (focus.type === 'space' && focus.target) {
-        emit('eyedrop-at', focus.target)
-      }
-    }
-  }
-  // 右键：擦除
-  else if (e.button === 2) {
+  } else if (props.mode === 'fill') {
     if (focus.type === 'voxel' && focus.coord) {
-      isDragging = true
-      dragMode = 'erase'
-      dragPainted.clear()
-      const idx = props.grid.toIdx(focus.coord.x, focus.coord.y, focus.coord.z)
-      dragPainted.add(idx)
-      emit('erase-at', focus.coord)
+      emit('fill-at', focus.coord)
+    } else if (focus.type === 'space') {
+      emit('fill-at', focus.target)
     }
-    // 空间焦点 + 右键 → 无操作（已经按设计）
+  } else if (props.mode === 'eyedrop') {
+    if (focus.type === 'voxel' && focus.coord) {
+      emit('eyedrop-at', focus.coord)
+    } else if (focus.type === 'space' && focus.target) {
+      emit('eyedrop-at', focus.target)
+    }
   }
 }
 
-function handlePointerUp() {
+function handlePointerUp(e: PointerEvent) {
+  // LMB up：检测是否为点击（短按 + 未移动）
+  if (e.button === 0 && lmbDown) {
+    const dt = Date.now() - lmbDown.time
+    if (lmbDown.isClick && dt < LMB_CLICK_MS) {
+      handleLmbClick(e)
+    }
+    lmbDown = null
+    return
+  }
+
   if (isDragging) {
     isDragging = false
     dragMode = null
     dragPainted.clear()
-    dragPlane = null
-  }
-  if (isPanning) {
-    isPanning = false
-    panStart = null
-    if (canvasRef.value) {
-      const mode = currentFocus.type === 'none' ? 'paint' : props.mode
-      canvasRef.value.style.cursor = getCursorForMode(mode)
-    }
   }
 }
 
@@ -635,12 +580,8 @@ function handlePointerLeave() {
     isDragging = false
     dragMode = null
     dragPainted.clear()
-    dragPlane = null
   }
-  if (isPanning) {
-    isPanning = false
-    panStart = null
-  }
+  lmbDown = null
 }
 
 function getCursorForMode(mode: string): string {

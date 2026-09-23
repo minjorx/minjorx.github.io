@@ -50,9 +50,9 @@ export async function createThreeScene(canvas: HTMLCanvasElement, n: number): Pr
   controls.minDistance = n * 0.3
   controls.maxDistance = n * 5
   controls.mouseButtons = {
-    LEFT: null as any,
-    MIDDLE: THREE.MOUSE.ROTATE,
-    RIGHT: THREE.MOUSE.PAN,
+    LEFT: THREE.MOUSE.ROTATE,
+    MIDDLE: THREE.MOUSE.PAN,
+    RIGHT: null as any,   // 自定义处理：擦除
   }
   // Shift + 左键 = 旋转
   // 注：这里通过自定义 keydown 处理 Shift 修饰
