@@ -128,6 +128,7 @@ function buildFaceMeshes(scene: THREE.Scene, n: number) {
     const mesh = new THREE.InstancedMesh(faceGeometry, material, maxInstances)
     mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage)
     mesh.count = 0
+    mesh.frustumCulled = false  // 避免 Three.js mesh-level 视锥剔除意外剔除面
     scene.add(mesh)
     faceMeshes[i] = mesh
   }
@@ -241,6 +242,7 @@ function buildInteriorWireframe(scene: THREE.Scene, n: number) {
   })
   interiorWireframe = new THREE.LineSegments(geo, material)
   interiorWireframe.visible = false
+  interiorWireframe.frustumCulled = false
   scene.add(interiorWireframe)
 }
 
