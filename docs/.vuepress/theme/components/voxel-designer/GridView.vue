@@ -40,7 +40,7 @@ let ctx: ThreeContext | null = null
 // 6 个面 mesh：按 [+X, -X, +Y, -Y, +Z, -Z] 顺序
 let faceMeshes: (THREE.InstancedMesh | null)[] = [null, null, null, null, null, null]
 // 每面 mesh 的 instance 对应哪个 voxel + 哪个 face（raycast 用）
-interface VisibleFace { voxel: Vec3; axis: 'x'|'y'|'z'; sign: 1|-1 }
+interface VisibleFace { voxel: Vec3; axis: 'x'|'y'|'z'; sign: 1|-1; position: 0 }
 let faceData: VisibleFace[][] = [[], [], [], [], [], []]
 
 // 内部体素线框（被完全包围的体素仍可见，避免"消失"）
@@ -173,27 +173,27 @@ function updateFaceMeshes(grid: VoxelGrid) {
 
         // +X
         if (x + 1 >= n || grid.data[grid.toIdx(x+1, y, z)] === 0) {
-          faceData[0].push({ voxel: { x, y, z }, axis: 'x', sign: 1 })
+          faceData[0].push({ voxel: { x, y, z }, axis: 'x', sign: 1, position: 0 })
         }
         // -X
         if (x - 1 < 0 || grid.data[grid.toIdx(x-1, y, z)] === 0) {
-          faceData[1].push({ voxel: { x, y, z }, axis: 'x', sign: -1 })
+          faceData[1].push({ voxel: { x, y, z }, axis: 'x', sign: -1, position: 0 })
         }
         // +Y
         if (y + 1 >= n || grid.data[grid.toIdx(x, y+1, z)] === 0) {
-          faceData[2].push({ voxel: { x, y, z }, axis: 'y', sign: 1 })
+          faceData[2].push({ voxel: { x, y, z }, axis: 'y', sign: 1, position: 0 })
         }
         // -Y
         if (y - 1 < 0 || grid.data[grid.toIdx(x, y-1, z)] === 0) {
-          faceData[3].push({ voxel: { x, y, z }, axis: 'y', sign: -1 })
+          faceData[3].push({ voxel: { x, y, z }, axis: 'y', sign: -1, position: 0 })
         }
         // +Z
         if (z + 1 >= n || grid.data[grid.toIdx(x, y, z+1)] === 0) {
-          faceData[4].push({ voxel: { x, y, z }, axis: 'z', sign: 1 })
+          faceData[4].push({ voxel: { x, y, z }, axis: 'z', sign: 1, position: 0 })
         }
         // -Z
         if (z - 1 < 0 || grid.data[grid.toIdx(x, y, z-1)] === 0) {
-          faceData[5].push({ voxel: { x, y, z }, axis: 'z', sign: -1 })
+          faceData[5].push({ voxel: { x, y, z }, axis: 'z', sign: -1, position: 0 })
         }
       }
     }
@@ -633,46 +633,30 @@ function computeInteractionFocus(): InteractionFocus {
   }
 
   if (bestVoxelHit) {
-    // 阶段 2（精确）：对最佳体素做 face plane 精确 raycast
-    // AABB 给出 entryFace 但不精确；这里用 1×1 面 plane 找精确命中
     const v = bestVoxelHit.voxel
-    let bestFaceHit: { dist: number; meshIdx: number; instanceId: number } | null = null
+
+    // 先尝试 face plane 精确 raycast（角/棱上可能漏）
+    // 如果 face plane 命中的是**入口面**（与 AABB entryFace 同方向）→ 用它
+    // 否则 → 用 AABB entryFace（更可靠）
+    let preciseFace: Face | null = null
     for (let i = 0; i < 6; i++) {
       const m = faceMeshes[i]
       if (!m || m.count === 0) continue
-      // 只检查属于该体素的 instance（避免其他体素干扰）
       const hits = raycaster.intersectObject(m, false)
       for (const hit of hits) {
         if (hit.instanceId === undefined) continue
-        // faceData[i][instanceId] 应当属于体素 v
         const fd = faceData[i][hit.instanceId]
         if (!fd || fd.voxel.x !== v.x || fd.voxel.y !== v.y || fd.voxel.z !== v.z) continue
-        if (!bestFaceHit || hit.distance < bestFaceHit.dist) {
-          bestFaceHit = { dist: hit.distance, meshIdx: i, instanceId: hit.instanceId }
+        // 只用**入口面**（与 AABB entryFace 同方向）的精确命中
+        if (fd.axis === bestVoxelHit.entryFace.axis && fd.sign === bestVoxelHit.entryFace.sign) {
+          preciseFace = fd
+          break  // 找到入口面的精确命中即可（不需要找最近的）
         }
       }
+      if (preciseFace) break
     }
-    if (bestFaceHit) {
-      const f = faceData[bestFaceHit.meshIdx][bestFaceHit.instanceId]
-      const normal = faceNormal(f.axis, f.sign)
-      const target: Vec3 = {
-        x: v.x + normal.x,
-        y: v.y + normal.y,
-        z: v.z + normal.z,
-      }
-      const inBounds = props.grid.inBounds(target)
-      const occupied = inBounds && props.grid.isOccupied(target)
-      return {
-        type: 'voxel',
-        coord: v,
-        target,
-        face: { axis: f.axis, sign: f.sign, position: 0 },
-        valid: inBounds && !occupied,
-        reason: !inBounds ? 'out-of-bounds' : occupied ? 'occupied' : undefined,
-      }
-    }
-    // 精确面没命中（说明鼠标在体素内部但不在任何面上），用 AABB 入口面
-    const face = bestVoxelHit.entryFace
+
+    const face = preciseFace ?? bestVoxelHit.entryFace
     const normal = faceNormal(face.axis, face.sign)
     const target: Vec3 = {
       x: v.x + normal.x,
