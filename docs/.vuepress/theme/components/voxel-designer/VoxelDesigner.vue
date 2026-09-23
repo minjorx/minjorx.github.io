@@ -10,7 +10,7 @@ import { UndoStack, makePaintOp, type Patch } from './lib/undo-stack'
 import { TEMPLATES, type Template } from './lib/templates'
 import { DEFAULT_PALETTE_VALUE, PRESET_PALETTE } from './lib/preset-palette'
 import { savePrefabs, loadPrefabs } from './lib/storage'
-import { mirrorAllPatches } from './lib/symmetry'
+import { mirrorAllPatches, mirrorCoord } from './lib/symmetry'
 import { floodFill, replaceColor } from './lib/snap'
 import { exportAsPrefab, importPrefabFromFile, downloadPrefab, downloadProject } from './lib/prefab'
 import { saveCurrent, loadCurrent, exportProject } from './lib/storage'
@@ -691,7 +691,6 @@ defineExpose({
           :current-color="currentColor"
           :template="currentTemplate"
           :template-params="currentParams"
-          :snap-mode="snapMode"
           :symmetry="effectiveSymmetry"
           :mode="mode"
           :is-dark="isDark"
