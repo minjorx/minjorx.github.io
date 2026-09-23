@@ -432,6 +432,21 @@ function updateFaceHighlight(focus: InteractionFocus, n: number) {
   faceHighlight.position.set(cx, cy, cz)
   faceHighlight.scale.set(scale, scale, 1)
 
+  // debug: 把当前 focus 信息贴到 console
+  if (debugEnabled.value && typeof console !== 'undefined') {
+    const fd = faceData[2] // for debug reference, just to avoid unused warning
+    console.log('[focus]', {
+      type: focus.type,
+      voxel: focus.coord,
+      face: focus.face,
+      target: focus.target,
+      valid: focus.valid,
+      highlight_pos: [cx, cy, cz],
+      highlight_scale: scale,
+    })
+    void fd
+  }
+
   // 用 quaternion 直接从 +Z 法线旋转到面法线，避免手算误差
   const NORMAL_Z = _tmpVec3a.set(0, 0, 1)
   _tmpVec3b.set(
