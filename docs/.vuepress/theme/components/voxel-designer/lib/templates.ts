@@ -1,8 +1,8 @@
 /**
  * 默认预制模型（5 个）
  *
- * - 所有模板使用 corner-min 原点（v0.1 简化）
- * - 返回相对坐标，从 (0,0,0) 开始的体素列表
+ * - 所有模板都声明 origin 类型 + originOffset(params)
+ * - 用户点击位置 = 模板的 origin 对应位置
  */
 
 import type { Vec3 } from './voxel-grid'
@@ -15,7 +15,10 @@ export interface Template {
   icon: string
   origin: OriginType
   params?: Record<string, { min: number; max: number; default: number; label: string }>
+  /** 返回局部坐标体素列表 */
   build: (params: Record<string, number>) => Vec3[]
+  /** origin 在局部坐标的位置；默认 corner-min = (0,0,0) */
+  originAt?: (params: Record<string, number>) => Vec3
 }
 
 function addVec(a: Vec3, b: Vec3): Vec3 {
@@ -108,6 +111,8 @@ const cylinder: Template = {
     h: { min: 1, max: 16, default: 2, label: '高度' },
   },
   build: ({ r, h }) => buildCylinder(r, h),
+  // 用户点击点 = 圆柱的"中心-底部"，即局部 (r, 0, r)
+  originAt: ({ r }) => ({ x: r, y: 0, z: r }),
 }
 
 /** 球 r（按欧几里得距离） */
@@ -136,6 +141,8 @@ const sphere: Template = {
     r: { min: 1, max: 12, default: 2, label: '半径' },
   },
   build: ({ r }) => buildSphere(r),
+  // 用户点击点 = 球的中心，局部 (r, r, r)
+  originAt: ({ r }) => ({ x: r, y: r, z: r }),
 }
 
 export const TEMPLATES: Template[] = [pixel, cube, box, cylinder, sphere]

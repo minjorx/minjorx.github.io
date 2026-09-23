@@ -216,7 +216,14 @@ function buildIndicator(scene: THREE.Scene, n: number) {
   scene.add(indicatorMesh)
 }
 
-function snapFromRay(raycaster: THREE.Raycaster, grid: VoxelGrid): { coord: Vec3; source: string; valid: boolean } | null {
+interface SnapInfo {
+  coord: Vec3
+  source: string
+  valid: boolean
+  hitVoxel?: Vec3   // 实际被击中的体素（用于擦除）
+}
+
+function snapFromRay(raycaster: THREE.Raycaster, grid: VoxelGrid): SnapInfo | null {
   const n = grid.n
 
   // 阶段 1: 体素面吸附
@@ -226,22 +233,18 @@ function snapFromRay(raycaster: THREE.Raycaster, grid: VoxelGrid): { coord: Vec3
       const hit = hits[0]
       const localNormal = hit.face?.normal
       if (localNormal) {
-        const instId = hit.instanceId ?? 0
-        // 找到 instanceId 对应的体素
-        // 由于我们按 idx 顺序压入，instanceId 即对应的"第 idx 个非空格"
-        // 但 ghost 也算 instance → 这里我们只取"非 ghost"的——instancedMesh 本身有效
-        // 简化：直接遍历网格找 hit.point 最近的已放体素
         const point = hit.point
         const cx = Math.floor(point.x)
         const cy = Math.floor(point.y)
         const cz = Math.floor(point.z)
-        // 用法线方向决定邻居
         const dirX = Math.round(localNormal.x)
         const dirY = Math.round(localNormal.y)
         const dirZ = Math.round(localNormal.z)
         const target = { x: cx + dirX, y: cy + dirY, z: cz + dirZ }
+        // hitVoxel = 命中体素的坐标（不是吸附邻居）
+        const hitVoxel = { x: cx, y: cy, z: cz }
         if (grid.inBounds(target)) {
-          return { coord: target, source: 'voxel-face', valid: !grid.isOccupied(target) }
+          return { coord: target, source: 'voxel-face', valid: !grid.isOccupied(target), hitVoxel }
         }
       }
     }
@@ -301,7 +304,7 @@ function getTemplatePreview(grid: VoxelGrid, template: Template, params: Record<
   return { inBounds, outOfBounds, truncated: outOfBounds.length > 0 }
 }
 
-function updateGhostAndIndicator(snapResult: { coord: Vec3; source: string; valid: boolean } | null) {
+function updateGhostAndIndicator(snapResult: SnapInfo | null) {
   if (!ctx || !ghostMeshIn || !ghostMeshOut || !indicatorMesh) return
 
   // 模板预览
@@ -362,7 +365,7 @@ function getMouseNDC(e: MouseEvent): THREE.Vector2 {
   )
 }
 
-let snapResult: { coord: Vec3; source: string; valid: boolean } | null = null
+let snapResult: SnapInfo | null = null
 
 function handlePointerMove(e: PointerEvent) {
   if (!ctx || !canvasRef.value) return
@@ -381,14 +384,17 @@ function handlePointerMove(e: PointerEvent) {
     emit('hover', null)
   }
 
-  // 拖动涂色
-  if (isDragging && dragMode && snapResult && snapResult.valid) {
-    const coord = snapResult.coord
-    const idx = props.grid.toIdx(coord.x, coord.y, coord.z)
+  // 拖动涂色 / 擦除
+  if (isDragging && dragMode && snapResult) {
+    // 涂色用 snap target；擦除用 hit voxel（如果有）
+    const target = dragMode === 'erase' && snapResult.hitVoxel ? snapResult.hitVoxel : snapResult.coord
+    if (dragMode === 'paint' && !snapResult.valid) return  // 涂色跳过占用位置
+    const idx = props.grid.toIdx(target.x, target.y, target.z)
+    if (props.grid.get(target.x, target.y, target.z) === 0 && dragMode === 'erase') return  // 擦空白跳过
     if (!dragPainted.has(idx)) {
       dragPainted.add(idx)
-      if (dragMode === 'paint') emit('paint-at', coord)
-      else emit('erase-at', coord)
+      if (dragMode === 'paint') emit('paint-at', target)
+      else emit('erase-at', target)
     }
   }
 }
@@ -418,18 +424,21 @@ function handlePointerDown(e: PointerEvent) {
       emit('paint-at', r.coord)
     }
   } else if (props.mode === 'erase') {
+    // 擦除目标 = 命中体素本身（不是 snap target）
+    const target = r.hitVoxel ?? r.coord
     isDragging = true
     dragMode = 'erase'
     dragPainted.clear()
-    if (props.grid.get(r.coord.x, r.coord.y, r.coord.z) !== 0) {
-      dragPainted.add(props.grid.toIdx(r.coord.x, r.coord.y, r.coord.z))
-      emit('erase-at', r.coord)
+    if (props.grid.get(target.x, target.y, target.z) !== 0) {
+      dragPainted.add(props.grid.toIdx(target.x, target.y, target.z))
+      emit('erase-at', target)
     }
   } else if (props.mode === 'fill') {
     if (r.valid) emit('fill-at', r.coord)
   } else if (props.mode === 'eyedrop') {
-    if (props.grid.get(r.coord.x, r.coord.y, r.coord.z) !== 0) {
-      emit('eyedrop-at', r.coord)
+    const target = r.hitVoxel ?? r.coord
+    if (props.grid.get(target.x, target.y, target.z) !== 0) {
+      emit('eyedrop-at', target)
     }
   }
 }
@@ -530,6 +539,8 @@ onMounted(async () => {
   canvas.addEventListener('pointerup', handlePointerUp)
   canvas.addEventListener('pointerleave', handlePointerLeave)
   canvas.addEventListener('contextmenu', (e) => e.preventDefault())
+  // 阻止 wheel 让外层页面滚动（OrbitControls 已 preventDefault，但保险起见再 swallow）
+  canvas.addEventListener('wheel', (e) => { e.stopPropagation() }, { passive: true })
   window.addEventListener('resize', handleResize)
 
   animate()
@@ -555,7 +566,7 @@ defineExpose({
 
 <template>
   <div class="grid-view-container">
-    <canvas ref="canvasRef" class="grid-canvas"></canvas>
+    <canvas ref="canvasRef" class="grid-canvas" :class="`mode-${mode}`"></canvas>
     <div class="hover-info" v-if="hoverInfoRef">
       <span>({{ hoverInfoRef.coord.x }}, {{ hoverInfoRef.coord.y }}, {{ hoverInfoRef.coord.z }})</span>
       <span v-if="hoverInfoRef.color !== 0" class="hover-color-swatch" :style="{ background: '#' + voxelToHex(hoverInfoRef.color).toString(16).padStart(6, '0') }"></span>
@@ -570,14 +581,20 @@ defineExpose({
   height: 100%;
   background: var(--vp-c-bg-alt);
   overflow: hidden;
+  overscroll-behavior: contain;
 }
 .grid-canvas {
   display: block;
   width: 100%;
   height: 100%;
   outline: none;
-  cursor: crosshair;
+  touch-action: none;
 }
+.grid-canvas.mode-paint    { cursor: crosshair; }
+.grid-canvas.mode-erase    { cursor: cell; }
+.grid-canvas.mode-fill     { cursor: pointer; }
+.grid-canvas.mode-eyedrop  { cursor: copy; }
+.grid-canvas.mode-replace  { cursor: pointer; }
 .hover-info {
   position: absolute;
   top: 8px;

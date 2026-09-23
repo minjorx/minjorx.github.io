@@ -173,10 +173,17 @@ function onPlaceTemplate(coord: Vec3) {
 function applyPaintTemplate(template: Template, params: Record<string, number>, anchor: Vec3) {
   const local = template.build(params)
   const n = grid.value.n
+  // origin 在 local 坐标中的位置（默认 corner-min = (0,0,0)）
+  const originAt = template.originAt ? template.originAt(params) : { x: 0, y: 0, z: 0 }
   const patches: Patch[] = []
   let truncated = 0
   for (const v of local) {
-    const world = { x: anchor.x + v.x, y: anchor.y + v.y, z: anchor.z + v.z }
+    // world = anchor - originAt + v → 用户点击位置 = origin
+    const world = {
+      x: anchor.x - originAt.x + v.x,
+      y: anchor.y - originAt.y + v.y,
+      z: anchor.z - originAt.z + v.z,
+    }
     if (!grid.value.inBounds(world)) {
       truncated++
       continue
@@ -206,6 +213,7 @@ function applyPaintTemplate(template: Template, params: Record<string, number>, 
     }
     patches.push(...symPatches)
   }
+  bumpGrid()
 
   const op = makePaintOp('paint-many', patches, grid.value,
     truncated > 0 ? `放模板（${patches.length} 格，截断 ${truncated}）` : `放模板（${patches.length} 格）`)
@@ -853,11 +861,14 @@ defineExpose({
   flex-direction: column;
   width: 100%;
   height: 700px;
+  max-height: calc(100vh - 80px);
+  min-height: 480px;
   background: var(--vp-c-bg);
   color: var(--vp-c-text-1);
   border-radius: 8px;
   overflow: hidden;
   border: 1px solid var(--vp-c-bg-alt);
+  touch-action: none;  /* 阻止移动端默认滚动/缩放 */
 }
 .topbar {
   display: flex;
