@@ -10,6 +10,7 @@ import {
   getAllSpaceFaces, raycastPlane,
   faceNormal,
   type Face,
+  type Axis,
 } from './lib/interaction'
 
 const props = defineProps<{
@@ -555,6 +556,120 @@ function computeInteractionFocus(): InteractionFocus {
     return { type: 'none', coord: null, target: null, face: null, valid: false }
   }
   const n = props.grid.n
+
+  // === 阶段 0：鼠标锚定（mouse-anchored，与 camera 角度无关）===
+  // 旧逻辑用 ray-AABB first hit 对堆叠体素会选到 BOTTOM 体素（鼠标其实在 TOP）。
+  // 新思路：把鼠标屏幕坐标投影到 3D，找出 mouse 停在哪个体素上、哪个面。
+  // 这样无论 camera 朝哪个方向，"鼠标在体素的顶面"就是顶面。
+
+  // 鼠标的 3D 位置：经过 cube 中心、垂直 camera 视线的平面
+  const _cubeCenter = new THREE.Vector3(n / 2, n / 2, n / 2)
+  const _planeNormal = new THREE.Vector3()
+    .subVectors(ctx.camera.position, _cubeCenter)
+    .normalize()
+  const _plane = new THREE.Plane().setFromNormalAndCoplanarPoint(_planeNormal, _cubeCenter)
+  const _mouseWorld = new THREE.Vector3()
+  if (raycaster.ray.intersectPlane(_plane, _mouseWorld)) {
+    const vx = Math.floor(_mouseWorld.x)
+    const vy = Math.floor(_mouseWorld.y)
+    const vz = Math.floor(_mouseWorld.z)
+
+    // 情况 A：mouse 在某 voxel 内 → 找最近的面
+    if (
+      vx >= 0 && vx < n && vy >= 0 && vy < n && vz >= 0 && vz < n &&
+      props.grid.data[props.grid.toIdx(vx, vy, vz)] !== 0
+    ) {
+      const fx = _mouseWorld.x - vx  // 0~1, 离 -X 面距离
+      const fy = _mouseWorld.y - vy
+      const fz = _mouseWorld.z - vz
+      // 找离哪面最近（dist 最大 = 该方向上的距离最远 = 该面最近）
+      let bestAxis: Axis = 'x'
+      let bestSign: 1 | -1 = -1
+      let bestDist = fx
+      if (1 - fx > bestDist) { bestDist = 1 - fx; bestAxis = 'x'; bestSign = 1 }
+      if (fy > bestDist) { bestDist = fy; bestAxis = 'y'; bestSign = -1 }
+      if (1 - fy > bestDist) { bestDist = 1 - fy; bestAxis = 'y'; bestSign = 1 }
+      if (fz > bestDist) { bestDist = fz; bestAxis = 'z'; bestSign = -1 }
+      if (1 - fz > bestDist) { bestDist = 1 - fz; bestAxis = 'z'; bestSign = 1 }
+
+      const face: Face = { axis: bestAxis, sign: bestSign, position: 0 }
+      const normal = faceNormal(face.axis, face.sign)
+      const target: Vec3 = {
+        x: vx + normal.x,
+        y: vy + normal.y,
+        z: vz + normal.z,
+      }
+      const inBounds = props.grid.inBounds(target)
+      const occupied = inBounds && props.grid.isOccupied(target)
+      return {
+        type: 'voxel',
+        coord: { x: vx, y: vy, z: vz },
+        target,
+        face,
+        valid: inBounds && !occupied,
+        reason: !inBounds ? 'out-of-bounds' : occupied ? 'occupied' : undefined,
+      }
+    }
+
+    // 情况 B：mouse 在 cube 内但不在体素上 → 检查最近的有可见面的邻居
+    if (vx >= 0 && vx < n && vy >= 0 && vy < n && vz >= 0 && vz < n) {
+      const checks: { axis: Axis; sign: 1 | -1; nx: number; ny: number; nz: number }[] = [
+        { axis: 'x', sign: 1,  nx: 1,  ny: 0,  nz: 0 },
+        { axis: 'x', sign: -1, nx: -1, ny: 0,  nz: 0 },
+        { axis: 'y', sign: 1,  nx: 0,  ny: 1,  nz: 0 },
+        { axis: 'y', sign: -1, nx: 0,  ny: -1, nz: 0 },
+        { axis: 'z', sign: 1,  nx: 0,  ny: 0,  nz: 1 },
+        { axis: 'z', sign: -1, nx: 0,  ny: 0,  nz: -1 },
+      ]
+      let bestDist = Infinity
+      let bestFace: Face | null = null
+      let bestVox: Vec3 | null = null
+      for (const c of checks) {
+        const nvx = vx + c.nx, nvy = vy + c.ny, nvz = vz + c.nz
+        if (nvx < 0 || nvx >= n || nvy < 0 || nvy >= n || nvz < 0 || nvz >= n) continue
+        if (props.grid.data[props.grid.toIdx(nvx, nvy, nvz)] === 0) continue  // 邻居必须存在
+        // 该面必须 visible（face culling 检查）
+        const fwdX = nvx + c.nx, fwdY = nvy + c.ny, fwdZ = nvz + c.nz
+        if (fwdX < 0 || fwdX >= n || fwdY < 0 || fwdY >= n || fwdZ < 0 || fwdZ >= n) {
+          // OOB → visible
+        } else if (props.grid.data[props.grid.toIdx(fwdX, fwdY, fwdZ)] === 0) {
+          // 空 cell → visible
+        } else {
+          continue  // 邻居被占，面不可见
+        }
+        // mouse 到该面平面的距离
+        const facePos = c.axis === 'x' ? nvx + c.sign : c.axis === 'y' ? nvy + c.sign : nvz + c.sign
+        const dist = c.axis === 'x' ? Math.abs(_mouseWorld.x - facePos)
+                  : c.axis === 'y' ? Math.abs(_mouseWorld.y - facePos)
+                  : Math.abs(_mouseWorld.z - facePos)
+        if (dist < bestDist) {
+          bestDist = dist
+          bestFace = { axis: c.axis, sign: c.sign, position: 0 }
+          bestVox = { x: nvx, y: nvy, z: nvz }
+        }
+      }
+      if (bestFace && bestVox) {
+        const normal = faceNormal(bestFace.axis, bestFace.sign)
+        const target: Vec3 = {
+          x: bestVox.x + normal.x,
+          y: bestVox.y + normal.y,
+          z: bestVox.z + normal.z,
+        }
+        const inBounds = props.grid.inBounds(target)
+        const occupied = inBounds && props.grid.isOccupied(target)
+        return {
+          type: 'voxel',
+          coord: bestVox,
+          target,
+          face: bestFace,
+          valid: inBounds && !occupied,
+          reason: !inBounds ? 'out-of-bounds' : occupied ? 'occupied' : undefined,
+        }
+      }
+    }
+  }
+
+  // === 阶段 1：fallback 回退到 ray-AABB（旧逻辑，鼠标在 N×N×N 外时）===
   const rayO: Vec3 = {
     x: raycaster.ray.origin.x,
     y: raycaster.ray.origin.y,
@@ -565,10 +680,6 @@ function computeInteractionFocus(): InteractionFocus {
     y: raycaster.ray.direction.y,
     z: raycaster.ray.direction.z,
   }
-
-  // === 阶段 1：射线穿过任何体素？===
-  // 旧实现用 1×1 face planes 相交判定（太精细，鼠标稍微偏离就漏）
-  // 新实现用 AABB（体素盒子）相交判定：只要 ray 穿过体素体积就算"鼠标在体素上"
 
   // Slab method: ray vs AABB [x, x+1]x[y, y+1]x[z, z+1]
   // 关键：记录 ray 实际进入体素盒的面（entry face），用它做交互面
@@ -632,48 +743,6 @@ function computeInteractionFocus(): InteractionFocus {
     }
   }
 
-  if (bestVoxelHit) {
-    const v = bestVoxelHit.voxel
-
-    // 先尝试 face plane 精确 raycast（角/棱上可能漏）
-    // 如果 face plane 命中的是**入口面**（与 AABB entryFace 同方向）→ 用它
-    // 否则 → 用 AABB entryFace（更可靠）
-    let preciseFace: Face | null = null
-    for (let i = 0; i < 6; i++) {
-      const m = faceMeshes[i]
-      if (!m || m.count === 0) continue
-      const hits = raycaster.intersectObject(m, false)
-      for (const hit of hits) {
-        if (hit.instanceId === undefined) continue
-        const fd = faceData[i][hit.instanceId]
-        if (!fd || fd.voxel.x !== v.x || fd.voxel.y !== v.y || fd.voxel.z !== v.z) continue
-        // 只用**入口面**（与 AABB entryFace 同方向）的精确命中
-        if (fd.axis === bestVoxelHit.entryFace.axis && fd.sign === bestVoxelHit.entryFace.sign) {
-          preciseFace = fd
-          break  // 找到入口面的精确命中即可（不需要找最近的）
-        }
-      }
-      if (preciseFace) break
-    }
-
-    const face = preciseFace ?? bestVoxelHit.entryFace
-    const normal = faceNormal(face.axis, face.sign)
-    const target: Vec3 = {
-      x: v.x + normal.x,
-      y: v.y + normal.y,
-      z: v.z + normal.z,
-    }
-    const inBounds = props.grid.inBounds(target)
-    const occupied = inBounds && props.grid.isOccupied(target)
-    return {
-      type: 'voxel',
-      coord: v,
-      target,
-      face: { axis: face.axis, sign: face.sign, position: 0 },
-      valid: inBounds && !occupied,
-      reason: !inBounds ? 'out-of-bounds' : occupied ? 'occupied' : undefined,
-    }
-  }
 
   // === 阶段 2：空间边界面 → 遍历 6 面，鼠标在哪面就是哪面，重复时取远的 ===
   let bestT = -Infinity
