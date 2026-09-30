@@ -435,7 +435,9 @@ function updateFaceHighlight(focus: InteractionFocus, n: number) {
 
   // debug: 把当前 focus 信息贴到 console
 if (debugEnabled.value && typeof console !== 'undefined') {
-  const fd = faceData[2] // for debug reference, just to avoid unused warning
+  const fd = faceData[2]
+  void fd
+  const mx = (window as any).__voxelMouseWorld as { x: number; y: number; z: number } | undefined
   console.log('[focus]', {
     type: focus.type,
     voxel: focus.coord,
@@ -443,9 +445,8 @@ if (debugEnabled.value && typeof console !== 'undefined') {
     target: focus.target,
     valid: focus.valid,
     highlight_pos: [cx, cy, cz],
-    highlight_scale: scale,
+    mouseWorld: mx ? [mx.x.toFixed(2), mx.y.toFixed(2), mx.z.toFixed(2)] : null,
   })
-  void fd
 }
 
   // 用 quaternion 直接从 +Z 法线旋转到面法线，避免手算误差
@@ -573,6 +574,11 @@ function computeInteractionFocus(): InteractionFocus {
     const vx = Math.floor(_mouseWorld.x)
     const vy = Math.floor(_mouseWorld.y)
     const vz = Math.floor(_mouseWorld.z)
+
+    // debug: 把鼠标 3D 位置暴露给 console
+    ;(window as any).__voxelMouseWorld = {
+      x: _mouseWorld.x, y: _mouseWorld.y, z: _mouseWorld.z,
+    }
 
     // 情况 A：mouse 在某 voxel 内 → 找最近的面
     if (
