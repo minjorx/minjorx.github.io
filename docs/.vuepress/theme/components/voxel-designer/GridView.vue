@@ -63,6 +63,7 @@ const debugEnabled = ref(false)
 let debugRay: THREE.Line | null = null
 let debugHit: THREE.Mesh | null = null
 let debugVoxelAABB: THREE.LineSegments | null = null
+let debugMousePos: THREE.Mesh | null = null  // 鼠标投影到 3D 后的位置
 const DEBUG_FAR = 200  // 射线延伸距离
 
 // 拖动状态（已废弃；保留以避免编译错误）
@@ -495,6 +496,13 @@ function buildDebug(scene: THREE.Scene) {
   debugHit.visible = false
   scene.add(debugHit)
 
+  // 鼠标 3D 位置（黄球——鼠标投影到 3D 后的位置）
+  const mousePosGeo = new THREE.SphereGeometry(0.15, 8, 8)
+  const mousePosMat = new THREE.MeshBasicMaterial({ color: 0xffff00, transparent: true, opacity: 0.9 })
+  debugMousePos = new THREE.Mesh(mousePosGeo, mousePosMat)
+  debugMousePos.visible = false
+  scene.add(debugMousePos)
+
   // 命中的体素 AABB 框（蓝线框）
   const boxGeo = new THREE.BoxGeometry(1, 1, 1)
   const edgesGeo = new THREE.EdgesGeometry(boxGeo)
@@ -506,11 +514,12 @@ function buildDebug(scene: THREE.Scene) {
 }
 
 function updateDebug(focus: InteractionFocus, hitPoint: Vec3 | null, hitVoxel: Vec3 | null) {
-  if (!debugRay || !debugHit || !debugVoxelAABB) return
+  if (!debugRay || !debugHit || !debugVoxelAABB || !debugMousePos) return
   if (!debugEnabled.value) {
     debugRay.visible = false
     debugHit.visible = false
     debugVoxelAABB.visible = false
+    debugMousePos.visible = false
     return
   }
 
@@ -528,7 +537,7 @@ function updateDebug(focus: InteractionFocus, hitPoint: Vec3 | null, hitVoxel: V
   debugRay.geometry.attributes.position.needsUpdate = true
   debugRay.visible = true
 
-  // 命中点
+  // 命中点（绿球）
   if (hitPoint) {
     debugHit.position.set(hitPoint.x + 0.5, hitPoint.y + 0.5, hitPoint.z + 0.5)
     debugHit.visible = true
@@ -536,12 +545,21 @@ function updateDebug(focus: InteractionFocus, hitPoint: Vec3 | null, hitVoxel: V
     debugHit.visible = false
   }
 
-  // 命中的体素 AABB
+  // 命中的体素 AABB（蓝线框）
   if (hitVoxel) {
     debugVoxelAABB.position.set(hitVoxel.x + 0.5, hitVoxel.y + 0.5, hitVoxel.z + 0.5)
     debugVoxelAABB.visible = true
   } else {
     debugVoxelAABB.visible = false
+  }
+
+  // 鼠标 3D 位置（黄球——code 算出的 mouseWorld）
+  const mw = (window as any).__voxelMouseWorld as { x: number; y: number; z: number } | undefined
+  if (mw) {
+    debugMousePos.position.set(mw.x, mw.y, mw.z)
+    debugMousePos.visible = true
+  } else {
+    debugMousePos.visible = false
   }
 }
 
