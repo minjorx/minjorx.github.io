@@ -1083,6 +1083,19 @@ function animate() {
   }
 }
 
+// 摄像头旋转时更新 focus（之前只看鼠标，旋转后焦点不更新）
+function onCameraChange() {
+  // 用最后已知的鼠标 NDC 位置 + 当前 camera 重新计算 focus
+  raycaster.setFromCamera(mouse, ctx!.camera)
+  currentFocus = computeInteractionFocus()
+  updateGhostAndHighlight(currentFocus)
+  updateDebug(
+    currentFocus,
+    currentFocus.type === 'voxel' ? currentFocus.coord : currentFocus.target,
+    currentFocus.type === 'voxel' ? currentFocus.coord : null,
+  )
+}
+
 onMounted(async () => {
   if (!canvasRef.value) return
   ctx = await createThreeScene(canvasRef.value, props.grid.n)
@@ -1106,6 +1119,9 @@ onMounted(async () => {
   canvas.addEventListener('contextmenu', (e) => e.preventDefault())
   canvas.addEventListener('wheel', (e) => { e.stopPropagation() }, { passive: true })
   window.addEventListener('resize', handleResize)
+
+  // 监听 OrbitControls 变化事件（拖动旋转/平移/缩放触发）
+  ctx.controls.addEventListener('change', onCameraChange)
 
   animate()
 })
