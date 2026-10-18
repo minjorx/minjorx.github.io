@@ -14,6 +14,7 @@ import TimeToolComponent from "./theme/components/time-tool/TimeTool.vue";
 import BpmToolComponent from "./theme/components/bpm-tool/BpmTool.vue";
 import IdCardParserComponent from "./theme/components/idcard-parser/IdCardParser.vue";
 import VoxelDesignerComponent from "./theme/components/voxel-designer/VoxelDesigner.vue";
+import JwtParserComponent from "./theme/components/jwt-tool/JwtParser.vue";
 
 // import './theme/styles/custom.css'
 
@@ -35,5 +36,6 @@ export default defineClientConfig({
     app.component("BpmToolComponent", BpmToolComponent);
     app.component("IdCardParserComponent", IdCardParserComponent);
     app.component("VoxelDesignerComponent", VoxelDesignerComponent);
+    app.component("JwtParserComponent", JwtParserComponent);
   },
 });

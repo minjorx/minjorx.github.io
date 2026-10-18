@@ -18,6 +18,7 @@ config:
 - **<a href="/tools/bpm">BPM 工具</a>** - 跟着节拍轻点，测节奏速度与稳定性
 - **<a href="/tools/idcard-parser">身份证解析</a>** - 一行一个，校验 + 解析地区 / 出生日期 / 性别 / 年龄
 - **<a href="/tools/voxel-designer">体素设计器</a>** - 网页版体素编辑器，搭积木、做图标、16 桶配色 / 生肖 / 星座
+- **<a href="/tools/jwt">JWT 解析</a>** - 解码 + 过期检查 + HS256/HS384/HS512 签名验证
 
 ## 使用方法
 
